@@ -59,6 +59,13 @@ sealed class TrayApp : ApplicationContext
         });
         menu.Items.Add(hotkeyItem);
         menu.Items.Add(new ToolStripSeparator());
+        var startItem = new ToolStripMenuItem("Start with Windows") { CheckOnClick = true, Checked = StartWithWindows.IsOn };
+        startItem.CheckedChanged += (_, _) =>
+        {
+            StartWithWindows.Set(startItem.Checked);
+            Log.Write($"Start with Windows {OnOff(StartWithWindows.IsOn)}");
+        };
+        menu.Items.Add(startItem);
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
 
         _icon = new NotifyIcon

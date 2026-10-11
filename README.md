@@ -43,6 +43,9 @@ Right-click the **PT** icon in the notification area to use it.
   `NeedsInputHotkeyKeys` in `settings.json` (Win+Shift+C is taken on this machine); the tray menu
   says so when another program owns the combination.
 
+- **Start with Windows** (off by default): adds Powertoys to your user's startup programs
+  (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`), pointing at the running exe.
+
 ## Build and run
 
 ```
