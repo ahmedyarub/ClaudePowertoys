@@ -3,6 +3,9 @@
 A tray app that adds small tweaks to the Claude desktop app without modifying it. It drives the
 app's own controls through Windows UI Automation.
 
+Unofficial: a personal tool, not affiliated with or endorsed by Anthropic. It reads Claude Desktop's
+local session files and Claude Code transcripts on your machine and sends nothing anywhere.
+
 Right-click the **PT** icon in the notification area to use it.
 
 ## Features
