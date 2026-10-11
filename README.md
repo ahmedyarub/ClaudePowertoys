@@ -38,6 +38,12 @@ Right-click the **PT** icon in the notification area to use it.
   prompts sent while Claude was working); pick one to scroll the conversation to it. Prompts that
   aren't loaded are reached by pressing the app's "Load earlier/later messages" buttons.
 
+- **Session status**: the Ctrl+Tab list shows each session's state (needs you / new reply /
+  working / idle) and context size, and the tray icon shows a red badge with the number of
+  sessions waiting for you (Claude asked a question or wants a plan approved, or finished a turn
+  you haven't seen), naming them in its tooltip. Left-click the icon to open the first one.
+  States come from each session's transcript, read as it grows. Permission prompts aren't in the
+  transcript, so a session waiting on one shows as working.
 - **Ctrl+Up/Down jumps between prompts** (on by default): in Claude, Ctrl+Up / Ctrl+Down scroll
   the conversation to your previous / next prompt, loading earlier messages when needed. Left
   alone in other text fields (terminal, Files editor); in the prompt box they jump instead of

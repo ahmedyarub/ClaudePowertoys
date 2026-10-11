@@ -30,6 +30,13 @@ sealed class SessionSwitcher : IDisposable
     public volatile bool Enabled;
     public TimeSpan RecentWindow = TimeSpan.FromHours(8);
 
+    /// <summary>Where the list gets each session's state from.</summary>
+    public Func<string, SessionStatusInfo?>? StatusOf
+    {
+        get => _form.StatusOf;
+        set => _form.StatusOf = value;
+    }
+
     public SessionSwitcher()
     {
         _ = _form.Handle;
@@ -151,7 +158,7 @@ sealed class SwitcherForm : Form
     static readonly IntPtr HWND_TOPMOST = new(-1);
 
     // Logical pixels, scaled by the DPI of Claude's monitor.
-    const int WidthLogical = 560, RowLogical = 44, PadLogical = 12, HeaderLogical = 34;
+    const int WidthLogical = 680, RowLogical = 44, PadLogical = 12, HeaderLogical = 34, DotLogical = 9;
 
     static readonly Color Background = Color.FromArgb(38, 38, 36);
     static readonly Color Border = Color.FromArgb(70, 70, 66);
@@ -162,6 +169,19 @@ sealed class SwitcherForm : Form
     List<SessionInfo> _sessions = [];
     int _selected;
     float _scale = 1;
+
+    /// <summary>Each session's state and context size, by app session id; null when unknown.</summary>
+    public Func<string, SessionStatusInfo?>? StatusOf;
+
+    static (Color Color, string Word) Describe(SessionState state) => state switch
+    {
+        SessionState.NeedsYou => (Color.FromArgb(235, 95, 85), "needs you"),
+        SessionState.NewReply => (Color.FromArgb(110, 195, 115), "new reply"),
+        SessionState.Working => (Color.FromArgb(230, 180, 80), "working"),
+        _ => (Color.FromArgb(120, 118, 112), "idle"),
+    };
+
+    static string Tokens(long n) => n >= 1_000_000 ? $"{n / 1_000_000.0:0.#}M" : n >= 1000 ? $"{n / 1000}k" : n.ToString();
 
     public SwitcherForm()
     {
@@ -250,12 +270,21 @@ sealed class SwitcherForm : Form
                 g.FillRectangle(fill, rect);
                 g.DrawRectangle(edge, rect.X, rect.Y, rect.Width - 1, rect.Height - 1);
             }
-            int folderWidth = s.Folder == "" ? 0 : Math.Min(S(170), TextRenderer.MeasureText(s.Folder, dimFont).Width + pad);
+            // Status dot, title, then "state · context tokens · folder" on the right.
+            var status = StatusOf?.Invoke(s.SessionId);
+            var (dotColor, word) = status == null ? (Color.FromArgb(120, 118, 112), "") : Describe(status.State);
+            int dot = S(DotLogical);
+            using (var dotBrush = new SolidBrush(dotColor))
+                g.FillEllipse(dotBrush, rect.X + pad, y + (row - dot) / 2, dot, dot);
+
+            var details = string.Join(" · ", new[] { word, status == null ? "" : Tokens(status.ContextTokens) + " ctx", s.Folder }.Where(p => p != ""));
+            int detailsWidth = details == "" ? 0 : Math.Min(S(300), TextRenderer.MeasureText(details, dimFont).Width + pad);
+            int titleX = rect.X + pad + dot + pad;
             var flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
             TextRenderer.DrawText(g, s.Title + (i == 0 ? "  (current)" : ""), titleFont,
-                new Rectangle(rect.X + pad, y, rect.Width - pad * 2 - folderWidth, row), TitleText, flags);
-            if (folderWidth > 0)
-                TextRenderer.DrawText(g, s.Folder, dimFont, new Rectangle(rect.Right - pad - folderWidth, y, folderWidth, row),
+                new Rectangle(titleX, y, rect.Right - pad - detailsWidth - titleX, row), TitleText, flags);
+            if (detailsWidth > 0)
+                TextRenderer.DrawText(g, details, dimFont, new Rectangle(rect.Right - pad - detailsWidth, y, detailsWidth, row),
                     DimText, (flags & ~TextFormatFlags.Left) | TextFormatFlags.Right);
         }
     }

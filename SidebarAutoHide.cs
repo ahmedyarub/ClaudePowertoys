@@ -180,6 +180,13 @@ static class ClaudeWindow
         return _lastForegroundIsClaude;
     }
 
+    /// <summary>The same question without the cache, for threads other than the UI thread.</summary>
+    public static bool IsInFrontSlow()
+    {
+        var fg = GetForegroundWindow();
+        return fg != IntPtr.Zero && fg == Find();
+    }
+
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
 }
 

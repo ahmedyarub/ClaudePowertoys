@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 
 namespace ClaudePowertoys;
 
@@ -14,9 +15,16 @@ sealed class TrayApp : ApplicationContext
     readonly PromptJumpShortcut _promptJump = new();
     readonly SidebarAutoHide _autoHide;
     readonly GlobalHotkey _needsInputHotkey;
+    readonly StatusMonitor _status;
+    readonly SynchronizationContext _ui;
+    List<(SessionInfo Session, SessionStatusInfo Status)> _waiting = [];
 
     public TrayApp()
     {
+        // The forms created above installed WinForms' synchronization context on this thread.
+        _ui = SynchronizationContext.Current!;
+        _status = new StatusMonitor(waiting => _ui.Post(_ => ShowWaiting(waiting), null));
+        _switcher.StatusOf = _status.Get;
         _autoHide = new SidebarAutoHide(_handleBlocker.OverlayHandle);
         _needsInputHotkey = new GlobalHotkey(_settings.NeedsInputHotkeyKeys, () =>
         {
@@ -76,10 +84,18 @@ sealed class TrayApp : ApplicationContext
 
         _icon = new NotifyIcon
         {
-            Icon = DrawIcon(),
+            Icon = DrawIcon(0),
             Text = "Claude Powertoys",
             ContextMenuStrip = menu,
             Visible = true,
+        };
+        _icon.MouseClick += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Left) return;
+            // The first waiting session, or the app's own list when there is none to open.
+            var link = _waiting.Count > 0 ? _waiting[0].Session.Link : ClaudeLinks.NeedsInput;
+            Log.Write($"Tray click: opening {(_waiting.Count > 0 ? $"'{_waiting[0].Session.Title}'" : "sessions waiting for you")}");
+            ClaudeLinks.Open(link);
         };
 
         _autoHide.Enabled = _settings.AutoHideSidebar;
@@ -92,6 +108,8 @@ sealed class TrayApp : ApplicationContext
         _outline.Enabled = _settings.OutlineButton;
         _outline.Start();
         _promptJump.Enabled = _settings.PromptJump;
+        _status.RecentWindow = TimeSpan.FromHours(_settings.RecentSessionHours);
+        _status.Start();
         _needsInputHotkey.Enabled = _settings.NeedsInputHotkey;
         if (_settings.NeedsInputHotkey && !_needsInputHotkey.Enabled) hotkeyItem.Text = hotkeyText + " (taken by another program)";
         Log.Write("Started: " + string.Join(", ", menu.Items.OfType<ToolStripMenuItem>()
@@ -121,13 +139,30 @@ sealed class TrayApp : ApplicationContext
         _outline.Dispose();
         _promptJump.Dispose();
         _needsInputHotkey.Dispose();
+        _status.Dispose();
         _icon.Visible = false;
         _icon.Dispose();
         Log.Write("Exited");
         base.ExitThreadCore();
     }
 
-    static Icon DrawIcon()
+    void ShowWaiting(List<(SessionInfo Session, SessionStatusInfo Status)> waiting)
+    {
+        _waiting = waiting;
+        var old = _icon.Icon;
+        _icon.Icon = DrawIcon(waiting.Count);
+        if (old != null) DestroyIcon(old.Handle);
+
+        var text = waiting.Count == 0 ? "Claude Powertoys"
+            : $"{waiting.Count} waiting: " + string.Join(", ", waiting.Select(w => w.Session.Title));
+        // The notification-area tooltip holds at most 127 characters.
+        _icon.Text = text.Length <= 127 ? text : text[..126] + "…";
+    }
+
+    [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr icon);
+
+    /// <param name="waiting">Drawn as a badge in the corner when above zero.</param>
+    static Icon DrawIcon(int waiting)
     {
         using var bmp = new Bitmap(32, 32);
         using (var g = Graphics.FromImage(bmp))
@@ -145,6 +180,14 @@ sealed class TrayApp : ApplicationContext
             using var font = new Font("Segoe UI", 15, FontStyle.Bold, GraphicsUnit.Pixel);
             using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
             g.DrawString("PT", font, Brushes.White, new RectangleF(0, 1, 32, 32), format);
+            if (waiting > 0)
+            {
+                using var badge = new SolidBrush(Color.FromArgb(200, 40, 40));
+                g.FillEllipse(badge, 13, 13, 19, 19);
+                g.DrawEllipse(Pens.White, 13, 13, 18, 18);
+                using var small = new Font("Segoe UI", waiting > 9 ? 10 : 13, FontStyle.Bold, GraphicsUnit.Pixel);
+                g.DrawString(waiting > 9 ? "9+" : waiting.ToString(), small, Brushes.White, new RectangleF(13, 14, 19, 19), format);
+            }
         }
         return Icon.FromHandle(bmp.GetHicon());
     }

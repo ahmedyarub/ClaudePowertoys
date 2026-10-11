@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace ClaudePowertoys;
 
-sealed record SessionInfo(string SessionId, string Title, string Folder, long LastFocusedAt)
+sealed record SessionInfo(string SessionId, string CliSessionId, string Title, string Folder, long LastFocusedAt)
 {
     /// <summary>Opens the session in Claude Desktop, the same link the app hands out for its sessions.</summary>
     public string Link => $"claude://claude.ai/epitaxy/{SessionId}";
@@ -55,7 +55,7 @@ static class RecentSessions
 
         return sessions
             .Where((m, i) => i == 0 || m.LastActivityAt >= since)
-            .Select(m => new SessionInfo(m.SessionId, m.Title != "" ? m.Title : "Untitled session", FolderName(m.Cwd), m.LastFocusedAt))
+            .Select(m => new SessionInfo(m.SessionId, m.CliSessionId, m.Title != "" ? m.Title : "Untitled session", FolderName(m.Cwd), m.LastFocusedAt))
             .ToList();
     }
 
@@ -70,7 +70,15 @@ static class RecentSessions
         return Path.GetFileName(cwd.TrimEnd('\\', '/'));
     }
 
+    static readonly object Gate = new();
+
+    /// <summary>The switcher, the status monitor and the outline button all read these, from different threads.</summary>
     static List<FileMeta> ReadSessionFiles()
+    {
+        lock (Gate) return ReadSessionFilesLocked();
+    }
+
+    static List<FileMeta> ReadSessionFilesLocked()
     {
         var result = new List<FileMeta>();
         if (!Directory.Exists(SessionsRoot)) return result;
