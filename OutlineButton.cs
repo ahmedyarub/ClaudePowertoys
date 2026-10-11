@@ -21,8 +21,6 @@ sealed class OutlineButton : IDisposable
     static readonly Condition PromptBoxCondition = new AndCondition(
         new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit),
         new PropertyCondition(AutomationElement.NameProperty, "Prompt"));
-    static readonly Condition HeadingCondition = new PropertyCondition(AutomationElement.LocalizedControlTypeProperty, "heading");
-    const string HeadingPrefix = "You said: ";
 
     readonly ButtonWindow _button;
     readonly Thread _thread;
@@ -151,38 +149,27 @@ sealed class OutlineButton : IDisposable
         int occurrence = prompts.Take(index).Count(p => Matches(Normalize(p), key));
         int total = prompts.Count(p => Matches(Normalize(p), key));
 
-        foreach (var loadButton in new[] { "Load earlier messages", "Load later messages" })
+        foreach (var loadButton in new[] { ConversationView.LoadEarlier, ConversationView.LoadLater })
         {
             for (int presses = 0; presses <= MaxLoadPresses; presses++)
             {
-                var headings = window.FindAll(TreeScope.Descendants, HeadingCondition).Cast<AutomationElement>()
-                    .Where(h => h.Current.Name.StartsWith(HeadingPrefix, StringComparison.Ordinal))
-                    .Where(h => Matches(key, Normalize(h.Current.Name[HeadingPrefix.Length..])))
+                var headings = ConversationView.PromptHeadings(window)
+                    .Where(h => Matches(key, Normalize(ConversationView.PromptStart(h))))
                     .ToList();
                 if (headings.Count > 0)
                 {
                     // All equals loaded: pick by position. Otherwise the target is the first or last loaded one.
                     var target = headings.Count == total ? headings[occurrence]
                         : occurrence == total - 1 ? headings[^1] : headings[0];
-                    ((ScrollItemPattern)target.GetCurrentPattern(ScrollItemPattern.Pattern)).ScrollIntoView();
+                    ConversationView.ScrollTo(target);
                     Log.Write($"Outline: jumped to prompt {index + 1} after {presses} load press(es)");
                     return;
                 }
-                if (!Press(window, loadButton)) break;
+                if (!ConversationView.Press(window, loadButton)) break;
                 Thread.Sleep(600);
             }
         }
         Log.Write($"Outline: prompt {index + 1} not found in the conversation ('{FirstLine(prompts[index], 60)}')");
-    }
-
-    static bool Press(AutomationElement window, string name)
-    {
-        var button = window.FindFirst(TreeScope.Descendants, new AndCondition(
-            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
-            new PropertyCondition(AutomationElement.NameProperty, name)));
-        if (button == null || !button.TryGetCurrentPattern(InvokePattern.Pattern, out var invoke)) return false;
-        ((InvokePattern)invoke).Invoke();
-        return true;
     }
 
     /// <summary>A heading shows the start of the prompt; it matches a prompt that begins with it.</summary>
@@ -192,7 +179,16 @@ sealed class OutlineButton : IDisposable
         return heading.Length > 0 && prompt.StartsWith(heading, StringComparison.Ordinal);
     }
 
-    static string Normalize(string text) => Regex.Replace(text, @"\s+", " ").Trim();
+    /// <summary>
+    /// Plain text with collapsed spaces. Headings show the prompt as rendered Markdown, so list numbers,
+    /// bullets, heading and quote marks, emphasis and backticks are dropped from both sides.
+    /// </summary>
+    static string Normalize(string text)
+    {
+        text = Regex.Replace(text, @"(?m)^\s*(\d+[.)]|[-*+]|#{1,6}|>)\s+", "");
+        text = Regex.Replace(text, @"[*_~`]", "");
+        return Regex.Replace(text, @"\s+", " ").Trim();
+    }
 
     static string FirstLine(string text, int max)
     {
