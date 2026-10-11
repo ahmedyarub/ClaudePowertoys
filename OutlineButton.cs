@@ -147,6 +147,10 @@ sealed class OutlineButton : IDisposable
         }) { Enabled = transcript != null });
         menu.Items.Add(new ToolStripMenuItem("Export conversation to Markdown…", null, (_, _) => Export(transcript!, session!.Value.Title))
             { Enabled = transcript != null });
+        menu.Items.Add(new ToolStripSeparator());
+        var bookmarks = new ToolStripMenuItem("Bookmarks");
+        BookmarkMenu.AddItems(bookmarks.DropDownItems);
+        menu.Items.Add(bookmarks);
         menu.Show(_button, new Point(_button.Width, _button.Height), ToolStripDropDownDirection.BelowLeft);
     }
 
@@ -209,23 +213,9 @@ sealed class OutlineButton : IDisposable
         Log.Write($"Outline: prompt {index + 1} not found in the conversation ('{FirstLine(prompts[index], 60)}')");
     }
 
-    /// <summary>A heading shows the start of the prompt; it matches a prompt that begins with it.</summary>
-    static bool Matches(string prompt, string heading)
-    {
-        heading = heading.TrimEnd('…').TrimEnd();
-        return heading.Length > 0 && prompt.StartsWith(heading, StringComparison.Ordinal);
-    }
+    static bool Matches(string text, string heading) => ConversationView.Matches(text, heading);
 
-    /// <summary>
-    /// Plain text with collapsed spaces. Headings show the prompt as rendered Markdown, so list numbers,
-    /// bullets, heading and quote marks, emphasis and backticks are dropped from both sides.
-    /// </summary>
-    static string Normalize(string text)
-    {
-        text = Regex.Replace(text, @"(?m)^\s*(\d+[.)]|[-*+]|#{1,6}|>)\s+", "");
-        text = Regex.Replace(text, @"[*_~`]", "");
-        return Regex.Replace(text, @"\s+", " ").Trim();
-    }
+    static string Normalize(string text) => ConversationView.Normalize(text);
 
     static string FirstLine(string text, int max)
     {

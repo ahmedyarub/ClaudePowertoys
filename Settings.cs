@@ -14,6 +14,7 @@ sealed class Settings
     public bool Snippets { get; set; } = true;
     public bool PromptHistory { get; set; } = true;
     public bool Search { get; set; } = true;
+    public bool Bookmarks { get; set; } = true;
     /// <summary>Registered only while Claude is the active window. Ctrl+Shift+F is the app's own Files toggle.</summary>
     public string SearchHotkeyKeys { get; set; } = "Ctrl+Shift+S";
     public bool NeedsInputHotkey { get; set; } = true;

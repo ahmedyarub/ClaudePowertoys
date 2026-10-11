@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Windows.Automation;
 
 namespace ClaudePowertoys;
@@ -12,8 +13,42 @@ static class ConversationView
     public const string LoadEarlier = "Load earlier messages";
     public const string LoadLater = "Load later messages";
     const string HeadingPrefix = "You said: ";
+    public const string ReplyPrefix = "Claude responded: ";
 
     static readonly Condition HeadingCondition = new PropertyCondition(AutomationElement.LocalizedControlTypeProperty, "heading");
+
+    /// <summary>Every loaded message heading, yours ("You said: ") and Claude's ("Claude responded: "), in conversation order.</summary>
+    public static List<AutomationElement> MessageHeadings(AutomationElement window) =>
+        window.FindAll(TreeScope.Descendants, HeadingCondition).Cast<AutomationElement>()
+            .Where(h => h.Current.Name.StartsWith(HeadingPrefix, StringComparison.Ordinal) || h.Current.Name.StartsWith(ReplyPrefix, StringComparison.Ordinal))
+            .ToList();
+
+    public static bool IsPrompt(AutomationElement heading) => heading.Current.Name.StartsWith(HeadingPrefix, StringComparison.Ordinal);
+
+    /// <summary>The start of the message a heading stands for, either side.</summary>
+    public static string MessageStart(AutomationElement heading)
+    {
+        var name = heading.Current.Name;
+        return name.StartsWith(HeadingPrefix, StringComparison.Ordinal) ? name[HeadingPrefix.Length..] : name[ReplyPrefix.Length..];
+    }
+
+    /// <summary>A heading shows the start of a message; it matches text that begins with it (both normalized).</summary>
+    public static bool Matches(string text, string heading)
+    {
+        heading = heading.TrimEnd('…').TrimEnd();
+        return heading.Length > 0 && text.StartsWith(heading, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Plain text with collapsed spaces. Headings show the message as rendered Markdown, so list numbers,
+    /// bullets, heading and quote marks, emphasis and backticks are dropped from both sides.
+    /// </summary>
+    public static string Normalize(string text)
+    {
+        text = Regex.Replace(text, @"(?m)^\s*(\d+[.)]|[-*+]|#{1,6}|>)\s+", "");
+        text = Regex.Replace(text, @"[*_~`]", "");
+        return Regex.Replace(text, @"\s+", " ").Trim();
+    }
 
     /// <summary>The loaded prompt headings, in conversation order.</summary>
     public static List<AutomationElement> PromptHeadings(AutomationElement window) =>

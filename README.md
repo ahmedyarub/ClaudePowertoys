@@ -67,6 +67,11 @@ Right-click the **PT** icon in the notification area to use it.
   words are highlighted. Up / Down pick a result, Enter opens the session and scrolls to the prompt the match
   belongs to, Esc closes. The hotkey is registered only while Claude is the active window, so
   other apps keep Ctrl+Shift+S (Ctrl+Shift+F is the app's own Files toggle).
+- **Ctrl+D: bookmarks** (on by default): point at any message in a conversation, yours or
+  Claude's, and press Ctrl+D (again to remove); a "★ Bookmarked" note confirms it. The tray's
+  Bookmarks menu, also on the outline button's right-click menu, lists them newest first; picking
+  one opens the session and scrolls to the message. Stored in
+  `%APPDATA%\ClaudePowertoys\bookmarks.json`. Left alone in other text fields (the terminal).
 - **Alt+Up: earlier prompts** (on by default): in Claude's prompt box, hold Alt and press Up to
   list your earlier prompts (newest first, every Claude Code session of the last 30 days); Up /
   Down move while Alt is held, Esc cancels, and releasing Alt types the chosen one at the cursor.

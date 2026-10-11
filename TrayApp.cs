@@ -15,6 +15,7 @@ sealed class TrayApp : ApplicationContext
     readonly PromptJumpShortcut _promptJump = new();
     readonly SnippetInserter _snippets = new();
     readonly PromptHistoryRecall _history = new();
+    readonly BookmarkShortcut _bookmarks = new();
     readonly SidebarAutoHide _autoHide;
     readonly GlobalHotkey _needsInputHotkey;
     readonly GlobalHotkey _newSessionHotkey;
@@ -99,6 +100,20 @@ sealed class TrayApp : ApplicationContext
             _settings.PromptHistory = on;
             _history.Enabled = on;
         }));
+        menu.Items.Add(Toggle("Ctrl+D: bookmark the message under the mouse", _settings.Bookmarks, on =>
+        {
+            _settings.Bookmarks = on;
+            _bookmarks.Enabled = on;
+        }));
+        var bookmarksMenu = new ToolStripMenuItem("Bookmarks");
+        // Re-read on every opening: Ctrl+D changes the list.
+        bookmarksMenu.DropDownOpening += (_, _) =>
+        {
+            bookmarksMenu.DropDownItems.Clear();
+            BookmarkMenu.AddItems(bookmarksMenu.DropDownItems);
+        };
+        bookmarksMenu.DropDownItems.Add("(loading)");
+        menu.Items.Add(bookmarksMenu);
         var snippetsMenu = new ToolStripMenuItem("Snippets");
         // Re-read on every opening, so edits to snippets.json show up without a restart.
         snippetsMenu.DropDownOpening += (_, _) =>
@@ -150,6 +165,7 @@ sealed class TrayApp : ApplicationContext
         _promptJump.Enabled = _settings.PromptJump;
         _snippets.Enabled = _settings.Snippets;
         _history.Enabled = _settings.PromptHistory;
+        _bookmarks.Enabled = _settings.Bookmarks;
         _status.RecentWindow = TimeSpan.FromHours(_settings.RecentSessionHours);
         _status.Start();
         Log.Write("Started: " + string.Join(", ", menu.Items.OfType<ToolStripMenuItem>()
@@ -199,6 +215,7 @@ sealed class TrayApp : ApplicationContext
         _promptJump.Dispose();
         _snippets.Dispose();
         _history.Dispose();
+        _bookmarks.Dispose();
         _needsInputHotkey.Dispose();
         _newSessionHotkey.Dispose();
         _foreground.Dispose();
