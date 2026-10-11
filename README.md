@@ -37,6 +37,9 @@ Right-click the **PT** icon in the notification area to use it.
   (read from its Claude Code transcript, `~/.claude/projects/<project>/<session>.jsonl`, including
   prompts sent while Claude was working); pick one to scroll the conversation to it. Prompts that
   aren't loaded are reached by pressing the app's "Load earlier/later messages" buttons.
+  Right-click it to **copy Claude's last answer as Markdown** or **export the conversation** to a
+  `.md` file (your prompts and Claude's text, without tool calls or thinking), both read from the
+  transcript, so unloaded parts are included.
 
 - **Session status**: the Ctrl+Tab list shows each session's state (needs you / new reply /
   working / idle) and context size, and the tray icon shows a red badge with the number of

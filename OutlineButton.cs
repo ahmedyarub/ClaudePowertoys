@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows.Automation;
@@ -33,7 +34,7 @@ sealed class OutlineButton : IDisposable
 
     public OutlineButton()
     {
-        _button = new ButtonWindow(ShowOutline);
+        _button = new ButtonWindow(ShowOutline, ShowExportMenu);
         _ = _button.Handle;
         _thread = new Thread(Loop) { IsBackground = true, Name = "OutlineButton" };
     }
@@ -129,6 +130,41 @@ sealed class OutlineButton : IDisposable
         menu.Show(_button, new Point(_button.Width, _button.Height), ToolStripDropDownDirection.BelowLeft);
     }
 
+    /// <summary>Right-click: copy Claude's last answer, or export the conversation. Runs on the UI thread.</summary>
+    void ShowExportMenu()
+    {
+        var session = RecentSessions.OnScreen();
+        var transcript = session == null ? null : ConversationPrompts.FindTranscript(session.Value.CliSessionId);
+
+        var menu = new ContextMenuStrip { ShowImageMargin = false, Renderer = DarkMenu.Renderer };
+        menu.Closed += (_, _) => menu.BeginInvoke(menu.Dispose);
+        menu.Items.Add(new ToolStripMenuItem("Copy Claude's last answer as Markdown", null, (_, _) =>
+        {
+            var answer = ConversationExport.LastAnswer(transcript!);
+            if (answer == null) { Log.Write("Copy last answer: no finished reply in this session"); return; }
+            Clipboard.SetText(answer);
+            Log.Write($"Copied the last answer ({answer.Length} characters)");
+        }) { Enabled = transcript != null });
+        menu.Items.Add(new ToolStripMenuItem("Export conversation to Markdown…", null, (_, _) => Export(transcript!, session!.Value.Title))
+            { Enabled = transcript != null });
+        menu.Show(_button, new Point(_button.Width, _button.Height), ToolStripDropDownDirection.BelowLeft);
+    }
+
+    static void Export(string transcript, string title)
+    {
+        var safeName = string.Concat(title.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '-' : c)).Trim();
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Export conversation",
+            Filter = "Markdown (*.md)|*.md",
+            FileName = (safeName.Length > 80 ? safeName[..80] : safeName) + ".md",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+        };
+        if (dialog.ShowDialog() != DialogResult.OK) return;
+        File.WriteAllText(dialog.FileName, ConversationExport.ToMarkdown(transcript, title));
+        Log.Write($"Exported the conversation to {dialog.FileName}");
+    }
+
     void JumpInBackground(List<string> prompts, int index)
     {
         if (Interlocked.CompareExchange(ref _jumping, 1, 0) != 0) return;
@@ -207,16 +243,18 @@ sealed class OutlineButton : IDisposable
         static readonly Color Glyph = Color.FromArgb(230, 228, 220);
 
         readonly Action _onClick;
+        readonly Action _onRightClick;
         readonly ToolTip _tip = new();
         bool _hover;
 
-        public ButtonWindow(Action onClick)
+        public ButtonWindow(Action onClick, Action onRightClick)
         {
             _onClick = onClick;
+            _onRightClick = onRightClick;
             BackColor = Fill;
             DoubleBuffered = true;
             Cursor = Cursors.Hand;
-            _tip.SetToolTip(this, "Conversation outline");
+            _tip.SetToolTip(this, "Conversation outline (right-click to copy or export)");
         }
 
         protected override void OnResize(EventArgs e)
@@ -235,6 +273,7 @@ sealed class OutlineButton : IDisposable
         {
             base.OnMouseUp(e);
             if (e.Button == MouseButtons.Left) _onClick();
+            else if (e.Button == MouseButtons.Right) _onRightClick();
         }
 
         protected override void OnPaint(PaintEventArgs e)

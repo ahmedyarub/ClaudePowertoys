@@ -35,12 +35,19 @@ static partial class ConversationPrompts
         {
             // Cheap filter before parsing: most lines are assistant messages and tool traffic.
             if (!line.Contains("\"type\":\"user\"") && !line.Contains("\"queued_command\"")) continue;
-            string? text;
-            try { text = PromptText(line); }
-            catch (JsonException) { continue; }
+            var text = PromptOf(line);
             if (text != null) prompts.Add(text);
         }
         return prompts;
+    }
+
+    /// <summary>The prompt a transcript line records, or null when it records something else.</summary>
+    public static string? PromptOf(string line)
+    {
+        try { return PromptText(line); }
+        catch (JsonException) { return null; }
+        catch (InvalidOperationException) { return null; }
+        catch (KeyNotFoundException) { return null; }
     }
 
     static string? PromptText(string line)

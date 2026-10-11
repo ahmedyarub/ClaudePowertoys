@@ -60,8 +60,14 @@ static class RecentSessions
     }
 
     /// <summary>The Claude Code session id (its transcript's file name) of the most recently focused session: the one on screen.</summary>
-    public static string? OnScreenCliSessionId() =>
-        ReadSessionFiles().Where(m => !m.IsArchived && m.CliSessionId != "").MaxBy(m => m.LastFocusedAt)?.CliSessionId;
+    public static string? OnScreenCliSessionId() => OnScreen()?.CliSessionId;
+
+    /// <summary>The Claude Code session id and title of the session on screen.</summary>
+    public static (string CliSessionId, string Title)? OnScreen()
+    {
+        var m = ReadSessionFiles().Where(m => !m.IsArchived && m.CliSessionId != "").MaxBy(m => m.LastFocusedAt);
+        return m == null ? null : (m.CliSessionId, m.Title != "" ? m.Title : "Untitled session");
+    }
 
     static string FolderName(string cwd)
     {
