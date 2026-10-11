@@ -16,6 +16,10 @@ sealed class SendNowShortcut : IDisposable
     const int WatchMs = 2000;
     const int PollMs = 100;
 
+    static readonly Condition PromptCondition = new AndCondition(
+        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit),
+        new PropertyCondition(AutomationElement.NameProperty, "Prompt"));
+
     static readonly Condition SendNowCondition = new AndCondition(
         new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
         new PropertyCondition(AutomationElement.NameProperty, "Send now", PropertyConditionFlags.IgnoreCase));
@@ -65,6 +69,9 @@ sealed class SendNowShortcut : IDisposable
             {
                 ((InvokePattern)invoke).Invoke();
                 Log.Write($"Ctrl+Enter: pressed Send now after {Environment.TickCount64 - start} ms");
+                // Invoking moves keyboard focus to the button; hand it back to the prompt box.
+                try { window.FindFirst(TreeScope.Descendants, PromptCondition)?.SetFocus(); }
+                catch (Exception ex) { Log.Write($"Ctrl+Enter: refocusing the prompt box failed: {ex.Message}"); }
             }
             else
             {
