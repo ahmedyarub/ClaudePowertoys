@@ -10,6 +10,7 @@ sealed class Settings
     public bool SessionSwitcher { get; set; } = true;
     public bool CtrlEnterSendsNow { get; set; } = true;
     public bool OutlineButton { get; set; } = true;
+    public bool PromptJump { get; set; } = true;
     public bool NeedsInputHotkey { get; set; } = true;
     /// <summary>The combination for "Sessions waiting for you". Win+Shift+C is taken on this machine.</summary>
     public string NeedsInputHotkeyKeys { get; set; } = "Win+Alt+C";

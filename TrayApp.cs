@@ -11,6 +11,7 @@ sealed class TrayApp : ApplicationContext
     readonly SessionSwitcher _switcher = new();
     readonly SendNowShortcut _sendNow = new();
     readonly OutlineButton _outline = new();
+    readonly PromptJumpShortcut _promptJump = new();
     readonly SidebarAutoHide _autoHide;
     readonly GlobalHotkey _needsInputHotkey;
 
@@ -49,6 +50,11 @@ sealed class TrayApp : ApplicationContext
             _settings.OutlineButton = on;
             _outline.Enabled = on;
         }));
+        menu.Items.Add(Toggle("Ctrl+Up/Down jumps between prompts", _settings.PromptJump, on =>
+        {
+            _settings.PromptJump = on;
+            _promptJump.Enabled = on;
+        }));
         var hotkeyText = $"{_settings.NeedsInputHotkeyKeys}: sessions waiting for you";
         ToolStripMenuItem? hotkeyItem = null;
         hotkeyItem = Toggle(hotkeyText, _settings.NeedsInputHotkey, on =>
@@ -85,6 +91,7 @@ sealed class TrayApp : ApplicationContext
         _sendNow.Enabled = _settings.CtrlEnterSendsNow;
         _outline.Enabled = _settings.OutlineButton;
         _outline.Start();
+        _promptJump.Enabled = _settings.PromptJump;
         _needsInputHotkey.Enabled = _settings.NeedsInputHotkey;
         if (_settings.NeedsInputHotkey && !_needsInputHotkey.Enabled) hotkeyItem.Text = hotkeyText + " (taken by another program)";
         Log.Write("Started: " + string.Join(", ", menu.Items.OfType<ToolStripMenuItem>()
@@ -112,6 +119,7 @@ sealed class TrayApp : ApplicationContext
         _switcher.Dispose();
         _sendNow.Dispose();
         _outline.Dispose();
+        _promptJump.Dispose();
         _needsInputHotkey.Dispose();
         _icon.Visible = false;
         _icon.Dispose();

@@ -38,6 +38,10 @@ Right-click the **PT** icon in the notification area to use it.
   prompts sent while Claude was working); pick one to scroll the conversation to it. Prompts that
   aren't loaded are reached by pressing the app's "Load earlier/later messages" buttons.
 
+- **Ctrl+Up/Down jumps between prompts** (on by default): in Claude, Ctrl+Up / Ctrl+Down scroll
+  the conversation to your previous / next prompt, loading earlier messages when needed. Left
+  alone in other text fields (terminal, Files editor); in the prompt box they jump instead of
+  moving the cursor by paragraph.
 - **Win+Alt+C: sessions waiting for you** (on by default): from any app, opens Claude Desktop's
   own "Sessions Waiting for You" (`claude://code/needs-input`). Change the combination with
   `NeedsInputHotkeyKeys` in `settings.json` (Win+Shift+C is taken on this machine); the tray menu
