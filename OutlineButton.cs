@@ -114,7 +114,7 @@ sealed class OutlineButton : IDisposable
         var transcript = cli == null ? null : ConversationPrompts.FindTranscript(cli);
         var prompts = transcript == null ? [] : ConversationPrompts.Read(transcript);
 
-        var menu = new ContextMenuStrip { ShowImageMargin = false };
+        var menu = new ContextMenuStrip { ShowImageMargin = false, Renderer = DarkMenu.Renderer };
         menu.Closed += (_, _) => menu.BeginInvoke(menu.Dispose);
         if (prompts.Count == 0)
         {
