@@ -23,7 +23,7 @@ static class RecentSessions
     // The fields used are all near the top of the file, ahead of the large arrays.
     const int HeadBytes = 16 * 1024;
 
-    sealed record FileMeta(DateTime WriteTime, string SessionId, string Title, string Cwd,
+    sealed record FileMeta(DateTime WriteTime, string SessionId, string CliSessionId, string Title, string Cwd,
         bool IsArchived, long LastActivityAt, long LastFocusedAt);
 
     static readonly Dictionary<string, FileMeta> Cache = new(StringComparer.OrdinalIgnoreCase);
@@ -45,6 +45,10 @@ static class RecentSessions
             .Select(m => new SessionInfo(m.SessionId, m.Title != "" ? m.Title : "Untitled session", FolderName(m.Cwd), m.LastFocusedAt))
             .ToList();
     }
+
+    /// <summary>The Claude Code session id (its transcript's file name) of the most recently focused session: the one on screen.</summary>
+    public static string? OnScreenCliSessionId() =>
+        ReadSessionFiles().Where(m => !m.IsArchived && m.CliSessionId != "").MaxBy(m => m.LastFocusedAt)?.CliSessionId;
 
     static string FolderName(string cwd)
     {
@@ -93,6 +97,7 @@ static class RecentSessions
         return new FileMeta(
             writeTime,
             StringField(head, "sessionId") ?? Path.GetFileNameWithoutExtension(file),
+            StringField(head, "cliSessionId") ?? "",
             StringField(head, "title") ?? "",
             StringField(head, "cwd") ?? "",
             Regex.Match(head, "\"isArchived\"\\s*:\\s*true").Success,

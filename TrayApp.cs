@@ -10,6 +10,7 @@ sealed class TrayApp : ApplicationContext
     readonly ResizeHandleBlocker _handleBlocker = new();
     readonly SessionSwitcher _switcher = new();
     readonly SendNowShortcut _sendNow = new();
+    readonly OutlineButton _outline = new();
     readonly SidebarAutoHide _autoHide;
 
     public TrayApp()
@@ -37,6 +38,11 @@ sealed class TrayApp : ApplicationContext
             _settings.CtrlEnterSendsNow = on;
             _sendNow.Enabled = on;
         }));
+        menu.Items.Add(Toggle("Conversation outline button", _settings.OutlineButton, on =>
+        {
+            _settings.OutlineButton = on;
+            _outline.Enabled = on;
+        }));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
 
@@ -55,8 +61,11 @@ sealed class TrayApp : ApplicationContext
         _switcher.Enabled = _settings.SessionSwitcher;
         _switcher.RecentWindow = TimeSpan.FromHours(_settings.RecentSessionHours);
         _sendNow.Enabled = _settings.CtrlEnterSendsNow;
+        _outline.Enabled = _settings.OutlineButton;
+        _outline.Start();
         Log.Write($"Started, auto-hide sidebar {OnOff(_settings.AutoHideSidebar)}, remove resize handle {OnOff(_settings.RemoveResizeHandle)}, " +
-            $"session switcher {OnOff(_settings.SessionSwitcher)}, Ctrl+Enter sends now {OnOff(_settings.CtrlEnterSendsNow)}");
+            $"session switcher {OnOff(_settings.SessionSwitcher)}, Ctrl+Enter sends now {OnOff(_settings.CtrlEnterSendsNow)}, " +
+            $"outline button {OnOff(_settings.OutlineButton)}");
     }
 
     ToolStripMenuItem Toggle(string text, bool initial, Action<bool> apply)
@@ -79,6 +88,7 @@ sealed class TrayApp : ApplicationContext
         _handleBlocker.Dispose();
         _switcher.Dispose();
         _sendNow.Dispose();
+        _outline.Dispose();
         _icon.Visible = false;
         _icon.Dispose();
         Log.Write("Exited");

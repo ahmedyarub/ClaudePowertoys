@@ -32,6 +32,12 @@ Right-click the **PT** icon in the notification area to use it.
   first, so when Claude is idle it is an ordinary send. Ctrl+Enter inside another text field
   (the Files editor, a dialog) is left alone.
 
+- **Conversation outline button** (on by default): a round ☰ button just right of the
+  conversation column. Click it for a list of the prompts you typed in the session on screen
+  (read from its Claude Code transcript, `~/.claude/projects/<project>/<session>.jsonl`, including
+  prompts sent while Claude was working); pick one to scroll the conversation to it. Prompts that
+  aren't loaded are reached by pressing the app's "Load earlier/later messages" buttons.
+
 ## Build and run
 
 ```
