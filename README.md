@@ -61,6 +61,11 @@ Right-click the **PT** icon in the notification area to use it.
   picker above the prompt box (1-9 pick); the tray's Snippets submenu lists them too and has
   Edit snippets…. A snippet is typed at the cursor, line breaks as Shift+Enter, so nothing is sent
   and the clipboard is left alone.
+- **Ctrl+Shift+S: search all sessions** (on by default): with Claude in front, opens a search
+  over every session's prompts and Claude's replies (archived sessions included; every word must
+  appear). Up / Down pick a result, Enter opens the session and scrolls to the prompt the match
+  belongs to, Esc closes. The hotkey is registered only while Claude is the active window, so
+  other apps keep Ctrl+Shift+S (Ctrl+Shift+F is the app's own Files toggle).
 - **Alt+Up: earlier prompts** (on by default): in Claude's prompt box, hold Alt and press Up to
   list your earlier prompts (newest first, every Claude Code session of the last 30 days); Up /
   Down move while Alt is held, Esc cancels, and releasing Alt types the chosen one at the cursor.

@@ -77,6 +77,15 @@ static class RecentSessions
             .Take(max)
             .ToList();
 
+    /// <summary>Every session the app has, archived ones included, most recently active first.</summary>
+    public static List<(SessionInfo Session, bool IsArchived, long LastActivityAt)> All() =>
+        ReadSessionFiles()
+            .Where(m => m.CliSessionId != "")
+            .OrderByDescending(m => m.LastActivityAt)
+            .Select(m => (new SessionInfo(m.SessionId, m.CliSessionId, m.Title != "" ? m.Title : "Untitled session", FolderName(m.Cwd), m.LastFocusedAt),
+                m.IsArchived, m.LastActivityAt))
+            .ToList();
+
     /// <summary>The Claude Code session id (its transcript's file name) of the most recently focused session: the one on screen.</summary>
     public static string? OnScreenCliSessionId() => OnScreen()?.CliSessionId;
 

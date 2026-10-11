@@ -18,6 +18,9 @@ sealed class TrayApp : ApplicationContext
     readonly SidebarAutoHide _autoHide;
     readonly GlobalHotkey _needsInputHotkey;
     readonly GlobalHotkey _newSessionHotkey;
+    readonly GlobalHotkey _searchHotkey;
+    readonly SearchWindow _search = new();
+    readonly ForegroundWatcher _foreground;
     readonly Control _menuOwner = new();
     readonly StatusMonitor _status;
     readonly SynchronizationContext _ui;
@@ -37,6 +40,18 @@ sealed class TrayApp : ApplicationContext
         });
         _ = _menuOwner.Handle;
         _newSessionHotkey = new GlobalHotkey(_settings.NewSessionHotkeyKeys, () => NewSessionMenu.Show(_menuOwner));
+
+        // A registered hotkey (unlike a keyboard hook) lets the search window take the keyboard. It is
+        // registered only while Claude is the active window, so other apps keep the combination.
+        _searchHotkey = new GlobalHotkey(_settings.SearchHotkeyKeys, () => _search.Open(ClaudeWindow.Find()));
+        _foreground = new ForegroundWatcher(hwnd => _searchHotkey.Enabled = _settings.Search && hwnd != IntPtr.Zero && hwnd == ClaudeWindow.Find());
+        // The watcher only reports changes; Claude may already be in front.
+        _searchHotkey.Enabled = _settings.Search && ClaudeWindow.IsInFrontSlow();
+        ThreadPool.QueueUserWorkItem(_ =>
+        {
+            try { SearchIndex.Warm(); }
+            catch (Exception ex) { Log.Write($"Search index: {ex.Message}"); }
+        });
 
         var menu = new ContextMenuStrip();
         menu.Items.Add(Toggle("Auto-hide sidebar", _settings.AutoHideSidebar, on =>
@@ -73,6 +88,11 @@ sealed class TrayApp : ApplicationContext
         {
             _settings.Snippets = on;
             _snippets.Enabled = on;
+        }));
+        menu.Items.Add(Toggle($"{_settings.SearchHotkeyKeys}: search all sessions", _settings.Search, on =>
+        {
+            _settings.Search = on;
+            if (!on) _searchHotkey.Enabled = false;
         }));
         menu.Items.Add(Toggle("Alt+Up: earlier prompts", _settings.PromptHistory, on =>
         {
@@ -181,6 +201,9 @@ sealed class TrayApp : ApplicationContext
         _history.Dispose();
         _needsInputHotkey.Dispose();
         _newSessionHotkey.Dispose();
+        _foreground.Dispose();
+        _searchHotkey.Dispose();
+        _search.Dispose();
         _menuOwner.Dispose();
         _status.Dispose();
         _icon.Visible = false;

@@ -171,13 +171,14 @@ sealed class OutlineButton : IDisposable
         var hwnd = _hwnd;
         ThreadPool.QueueUserWorkItem(_ =>
         {
-            try { Jump(hwnd, prompts, index); }
+            try { JumpToPrompt(hwnd, prompts, index); }
             catch (Exception ex) { Log.Write($"Outline jump failed: {ex.GetType().Name}: {ex.Message}"); }
             finally { Interlocked.Exchange(ref _jumping, 0); }
         });
     }
 
-    static void Jump(IntPtr hwnd, List<string> prompts, int index)
+    /// <summary>Scrolls the conversation on screen to prompt <paramref name="index"/> of <paramref name="prompts"/> (its transcript's prompts).</summary>
+    public static void JumpToPrompt(IntPtr hwnd, List<string> prompts, int index)
     {
         var window = AutomationElement.FromHandle(hwnd);
         var key = Normalize(prompts[index]);

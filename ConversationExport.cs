@@ -12,6 +12,23 @@ static class ConversationExport
 {
     sealed record Part(bool FromUser, string Text, string? MessageId, bool EndsTurn);
 
+    /// <summary>
+    /// The conversation's prompts and Claude's text in order, each with the index of the prompt it
+    /// belongs to (its own index for a prompt; the prompt before it for Claude's text, -1 before any).
+    /// Prompt indexes match ConversationPrompts.Read.
+    /// </summary>
+    public static List<(bool FromUser, string Text, int PromptIndex)> Parts(string transcriptPath)
+    {
+        var result = new List<(bool, string, int)>();
+        int prompt = -1;
+        foreach (var p in Read(transcriptPath))
+        {
+            if (p.FromUser) prompt++;
+            result.Add((p.FromUser, p.Text, prompt));
+        }
+        return result;
+    }
+
     /// <summary>The text of Claude's last finished reply: every text block of its last end_turn message.</summary>
     public static string? LastAnswer(string transcriptPath)
     {
