@@ -28,12 +28,16 @@ sealed class BookmarkManager : Form
     {
         Text = "Bookmarks: Claude Powertoys";
         StartPosition = FormStartPosition.CenterScreen;
-        AutoScaleMode = AutoScaleMode.Dpi;
+        // Sizes are given in logical pixels and scaled here: WinForms doesn't scale controls built in
+        // code, and fonts in points already follow the DPI.
+        float scale = DeviceDpi / 96f;
+        int S(int logical) => (int)Math.Round(logical * scale);
+        AutoScaleMode = AutoScaleMode.None;
         Font = new Font("Segoe UI", 10f);
         BackColor = Background;
         ForeColor = RowText;
-        ClientSize = new Size(1100, 640);
-        MinimumSize = new Size(700, 400);
+        ClientSize = new Size(S(1100), S(680));
+        MinimumSize = new Size(S(700), S(420));
         KeyPreview = true;
 
         _search.Dock = DockStyle.Fill;
@@ -43,7 +47,7 @@ sealed class BookmarkManager : Form
         _search.PlaceholderText = "Search bookmarks";
         _search.TextChanged += (_, _) => Fill();
 
-        var top = new Panel { Dock = DockStyle.Top, Height = 44, Padding = new Padding(10, 10, 10, 6), BackColor = Background };
+        var top = new Panel { Dock = DockStyle.Top, Height = S(56), Padding = new Padding(S(12), S(12), S(12), S(10)), BackColor = Background };
         top.Controls.Add(_search);
 
         _folders.Dock = DockStyle.Fill;
@@ -55,7 +59,8 @@ sealed class BookmarkManager : Form
         _folders.FullRowSelect = true;
         _folders.ShowLines = false;
         _folders.ShowRootLines = false;
-        _folders.ItemHeight = 30;
+        _folders.ItemHeight = S(38);
+        _folders.Indent = S(12);
         _folders.LabelEdit = true;
         _folders.AllowDrop = true;
         _folders.AfterSelect += (_, _) => Fill();
@@ -75,10 +80,12 @@ sealed class BookmarkManager : Form
         _list.ForeColor = RowText;
         _list.LabelEdit = true;
         _list.OwnerDraw = true;
-        _list.Columns.Add("Name", 460);
-        _list.Columns.Add("Session", 280);
-        _list.Columns.Add("By", 70);
-        _list.Columns.Add("Added", 130);
+        _list.Columns.Add("Name", S(460));
+        _list.Columns.Add("Session", S(280));
+        _list.Columns.Add("By", S(80));
+        _list.Columns.Add("Added", S(140));
+        // A Details list's row height follows its image list; a blank one makes the rows taller.
+        _list.SmallImageList = new ImageList { ImageSize = new Size(1, S(36)) };
         _list.DrawColumnHeader += DrawHeader;
         _list.DrawItem += (_, e) => e.DrawDefault = true;
         _list.DrawSubItem += (_, e) => e.DrawDefault = true;
@@ -88,14 +95,21 @@ sealed class BookmarkManager : Form
         _list.ItemDrag += (_, _) => DoDragDrop(SelectedIds().ToArray(), DragDropEffects.Move);
         _list.ContextMenuStrip = BookmarkMenuStrip();
 
-        var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 240, BackColor = Line, SplitterWidth = 1 };
+        // A wide splitter to grab, drawn as a thin line in its middle.
+        var split = new SplitContainer { Dock = DockStyle.Fill, BackColor = Background, SplitterWidth = S(7), Panel1MinSize = S(160), Panel2MinSize = S(300) };
+        split.Paint += (_, e) =>
+        {
+            var r = split.SplitterRectangle;
+            using var line = new Pen(Line, Math.Max(1, S(1)));
+            e.Graphics.DrawLine(line, r.Left + r.Width / 2, r.Top, r.Left + r.Width / 2, r.Bottom);
+        };
         split.Panel1.Controls.Add(_folders);
         split.Panel1.BackColor = Panel;
         split.Panel2.Controls.Add(_list);
 
         _status.Dock = DockStyle.Bottom;
-        _status.Height = 28;
-        _status.Padding = new Padding(10, 4, 10, 4);
+        _status.Height = S(34);
+        _status.Padding = new Padding(S(12), S(6), S(12), S(6));
         _status.ForeColor = DimText;
         _status.BackColor = Background;
 
@@ -104,7 +118,12 @@ sealed class BookmarkManager : Form
         Controls.Add(_status);
 
         BookmarkStore.Changed += OnStoreChanged;
-        Load += (_, _) => { FillFolders(AllNode); _search.Focus(); };
+        Load += (_, _) =>
+        {
+            split.SplitterDistance = S(270);
+            FillFolders(AllNode);
+            _search.Focus();
+        };
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
