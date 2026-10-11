@@ -4,8 +4,8 @@ using System.Runtime.InteropServices;
 namespace ClaudePowertoys;
 
 /// <summary>
-/// Alt+Tab for Claude Desktop's running Code sessions. While Claude is in front, Ctrl+Tab opens a
-/// list of the running sessions (most recently focused first) with the previous session selected;
+/// Alt+Tab for Claude Desktop's recently active Code sessions. While Claude is in front, Ctrl+Tab
+/// opens a list of them (most recently focused first) with the previous session selected;
 /// Tab / Shift+Tab move the selection while Ctrl stays down, Esc cancels, and releasing Ctrl
 /// switches to the selection. Tab is swallowed while Ctrl is held so the app's own Ctrl+Tab
 /// (Go > Next Session) doesn't fire as well.
@@ -33,6 +33,7 @@ sealed class SessionSwitcher : IDisposable
     int _selected;
 
     public volatile bool Enabled;
+    public TimeSpan RecentWindow = TimeSpan.FromHours(8);
 
     public SessionSwitcher()
     {
@@ -140,7 +141,7 @@ sealed class SessionSwitcher : IDisposable
         ThreadPool.QueueUserWorkItem(_ =>
         {
             List<SessionInfo>? found = null;
-            try { found = ActiveSessions.Scan(); }
+            try { found = RecentSessions.Scan(RecentWindow); }
             catch (Exception ex) { Log.Write($"Session scan failed: {ex.GetType().Name}: {ex.Message}"); }
             lock (_gate)
             {
@@ -273,13 +274,13 @@ sealed class SwitcherForm : Form
         using var dimFont = new Font("Segoe UI", 12 * _scale, FontStyle.Regular, GraphicsUnit.Pixel);
         int pad = S(PadLogical), row = S(RowLogical);
 
-        TextRenderer.DrawText(g, "Running sessions", dimFont, new Rectangle(pad, pad, Width - pad * 2, S(HeaderLogical) - pad / 2),
+        TextRenderer.DrawText(g, "Recent sessions", dimFont, new Rectangle(pad, pad, Width - pad * 2, S(HeaderLogical) - pad / 2),
             DimText, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
 
         int y = pad + S(HeaderLogical) - pad / 2;
         if (_sessions.Count == 0)
         {
-            TextRenderer.DrawText(g, "Looking for running sessions…", titleFont, new Rectangle(pad, y, Width - pad * 2, row),
+            TextRenderer.DrawText(g, "Looking for recent sessions…", titleFont, new Rectangle(pad, y, Width - pad * 2, row),
                 DimText, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
             return;
         }

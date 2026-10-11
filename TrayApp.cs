@@ -47,6 +47,7 @@ sealed class TrayApp : ApplicationContext
         _handleBlocker.Enabled = _settings.RemoveResizeHandle;
         _handleBlocker.Start();
         _switcher.Enabled = _settings.SessionSwitcher;
+        _switcher.RecentWindow = TimeSpan.FromHours(_settings.RecentSessionHours);
         Log.Write($"Started, auto-hide sidebar {OnOff(_settings.AutoHideSidebar)}, remove resize handle {OnOff(_settings.RemoveResizeHandle)}, session switcher {OnOff(_settings.SessionSwitcher)}");
     }
 

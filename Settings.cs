@@ -8,6 +8,8 @@ sealed class Settings
     public bool AutoHideSidebar { get; set; }
     public bool RemoveResizeHandle { get; set; } = true;
     public bool SessionSwitcher { get; set; } = true;
+    /// <summary>How far back a session's last activity may be for the Ctrl+Tab list.</summary>
+    public double RecentSessionHours { get; set; } = 8;
 
     static readonly string Dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ClaudePowertoys");
     static readonly string FilePath = Path.Combine(Dir, "settings.json");
