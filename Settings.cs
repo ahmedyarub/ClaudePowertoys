@@ -15,6 +15,8 @@ sealed class Settings
     public bool NeedsInputHotkey { get; set; } = true;
     /// <summary>The combination for "Sessions waiting for you". Win+Shift+C is taken on this machine.</summary>
     public string NeedsInputHotkeyKeys { get; set; } = "Win+Alt+C";
+    public bool NewSessionHotkey { get; set; } = true;
+    public string NewSessionHotkeyKeys { get; set; } = "Win+Alt+N";
     /// <summary>How far back a session's last activity may be for the Ctrl+Tab list.</summary>
     public double RecentSessionHours { get; set; } = 8;
 

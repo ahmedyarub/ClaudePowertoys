@@ -16,6 +16,10 @@ static class ClaudeLinks
     /// <summary>The app's own "Sessions Waiting for You" action.</summary>
     public const string NeedsInput = "claude://code/needs-input?source=desktop_action";
 
+    /// <summary>A new Code session, in <paramref name="folder"/> when given (the app's jump list uses the same link).</summary>
+    public static string NewCodeSession(string? folder) =>
+        "claude://code/new?source=desktop_action" + (folder == null ? "" : "&folder=" + Uri.EscapeDataString(folder));
+
     /// <summary>Opens a claude:// link off the calling thread: ShellExecute can be slow, which a keyboard hook can't afford.</summary>
     public static void Open(string link) => ThreadPool.QueueUserWorkItem(_ =>
     {
@@ -58,6 +62,20 @@ static class RecentSessions
             .Select(m => new SessionInfo(m.SessionId, m.CliSessionId, m.Title != "" ? m.Title : "Untitled session", FolderName(m.Cwd), m.LastFocusedAt))
             .ToList();
     }
+
+    /// <summary>
+    /// Folders of unarchived sessions, most recently active first, the way the app's own jump list
+    /// picks them for "New Code Session in". Scratch workspaces ("No folder" sessions) are left out.
+    /// </summary>
+    public static List<string> RecentFolders(int max) =>
+        ReadSessionFiles()
+            .Where(m => !m.IsArchived && m.Cwd != "" && !m.Cwd.Contains(@"\Claude\scratch-workspaces\", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(m => m.LastActivityAt)
+            .Select(m => m.Cwd.TrimEnd('\\', '/'))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(Directory.Exists)
+            .Take(max)
+            .ToList();
 
     /// <summary>The Claude Code session id (its transcript's file name) of the most recently focused session: the one on screen.</summary>
     public static string? OnScreenCliSessionId() => OnScreen()?.CliSessionId;

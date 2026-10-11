@@ -16,6 +16,8 @@ sealed class TrayApp : ApplicationContext
     readonly SnippetInserter _snippets = new();
     readonly SidebarAutoHide _autoHide;
     readonly GlobalHotkey _needsInputHotkey;
+    readonly GlobalHotkey _newSessionHotkey;
+    readonly Control _menuOwner = new();
     readonly StatusMonitor _status;
     readonly SynchronizationContext _ui;
     List<(SessionInfo Session, SessionStatusInfo Status)> _waiting = [];
@@ -32,6 +34,8 @@ sealed class TrayApp : ApplicationContext
             Log.Write($"{_settings.NeedsInputHotkeyKeys}: opening sessions waiting for you");
             ClaudeLinks.Open(ClaudeLinks.NeedsInput);
         });
+        _ = _menuOwner.Handle;
+        _newSessionHotkey = new GlobalHotkey(_settings.NewSessionHotkeyKeys, () => NewSessionMenu.Show(_menuOwner));
 
         var menu = new ContextMenuStrip();
         menu.Items.Add(Toggle("Auto-hide sidebar", _settings.AutoHideSidebar, on =>
@@ -80,15 +84,8 @@ sealed class TrayApp : ApplicationContext
         };
         snippetsMenu.DropDownItems.Add("(loading)");
         menu.Items.Add(snippetsMenu);
-        var hotkeyText = $"{_settings.NeedsInputHotkeyKeys}: sessions waiting for you";
-        ToolStripMenuItem? hotkeyItem = null;
-        hotkeyItem = Toggle(hotkeyText, _settings.NeedsInputHotkey, on =>
-        {
-            _settings.NeedsInputHotkey = on;
-            _needsInputHotkey.Enabled = on;
-            hotkeyItem!.Text = on && !_needsInputHotkey.Enabled ? hotkeyText + " (taken by another program)" : hotkeyText;
-        });
-        menu.Items.Add(hotkeyItem);
+        menu.Items.Add(HotkeyToggle("sessions waiting for you", _needsInputHotkey, _settings.NeedsInputHotkey, on => _settings.NeedsInputHotkey = on));
+        menu.Items.Add(HotkeyToggle("new session in a recent folder", _newSessionHotkey, _settings.NewSessionHotkey, on => _settings.NewSessionHotkey = on));
         menu.Items.Add(new ToolStripSeparator());
         var startItem = new ToolStripMenuItem("Start with Windows") { CheckOnClick = true, Checked = StartWithWindows.IsOn };
         startItem.CheckedChanged += (_, _) =>
@@ -128,8 +125,6 @@ sealed class TrayApp : ApplicationContext
         _snippets.Enabled = _settings.Snippets;
         _status.RecentWindow = TimeSpan.FromHours(_settings.RecentSessionHours);
         _status.Start();
-        _needsInputHotkey.Enabled = _settings.NeedsInputHotkey;
-        if (_settings.NeedsInputHotkey && !_needsInputHotkey.Enabled) hotkeyItem.Text = hotkeyText + " (taken by another program)";
         Log.Write("Started: " + string.Join(", ", menu.Items.OfType<ToolStripMenuItem>()
             .Where(i => i.CheckOnClick).Select(i => $"{i.Text} {OnOff(i.Checked)}")));
     }
@@ -146,6 +141,25 @@ sealed class TrayApp : ApplicationContext
         return item;
     }
 
+    /// <summary>A switch for a global hotkey, registered right away; says so when another program owns the keys.</summary>
+    ToolStripMenuItem HotkeyToggle(string action, GlobalHotkey hotkey, bool initial, Action<bool> save)
+    {
+        var text = $"{hotkey.Text}: {action}";
+        ToolStripMenuItem? item = null;
+        void Apply(bool on)
+        {
+            hotkey.Enabled = on;
+            item!.Text = on && !hotkey.Enabled ? text + " (taken by another program)" : text;
+        }
+        item = Toggle(text, initial, on =>
+        {
+            save(on);
+            Apply(on);
+        });
+        Apply(initial);
+        return item;
+    }
+
     static string OnOff(bool on) => on ? "on" : "off";
 
     protected override void ExitThreadCore()
@@ -158,6 +172,8 @@ sealed class TrayApp : ApplicationContext
         _promptJump.Dispose();
         _snippets.Dispose();
         _needsInputHotkey.Dispose();
+        _newSessionHotkey.Dispose();
+        _menuOwner.Dispose();
         _status.Dispose();
         _icon.Visible = false;
         _icon.Dispose();

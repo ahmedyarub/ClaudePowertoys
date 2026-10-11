@@ -61,6 +61,10 @@ Right-click the **PT** icon in the notification area to use it.
   `NeedsInputHotkeyKeys` in `settings.json` (Win+Shift+C is taken on this machine); the tray menu
   says so when another program owns the combination.
 
+- **Win+Alt+N: new session in a recent folder** (on by default): from any app, a menu at the
+  mouse of the folders your unarchived sessions worked in (most recent first, 1-9 pick, 0 for no
+  folder) starts a new Code session there through `claude://code/new?folder=`, the same link the
+  app's own jump list uses. `NewSessionHotkeyKeys` in `settings.json` changes the keys.
 - **Start with Windows** (off by default): adds Powertoys to your user's startup programs
   (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`), pointing at the running exe.
 
