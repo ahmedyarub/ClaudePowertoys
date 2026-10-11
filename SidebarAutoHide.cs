@@ -10,33 +10,41 @@ namespace ClaudePowertoys;
 /// without resizing it and closes by itself once the pointer leaves. A sidebar docked with the
 /// app's "Show sidebar" button counts as pinned and is left alone.
 ///
-/// The peek opens when the pointer enters the collapsed "Show sidebar" button, so the reveal posts
-/// a WM_MOUSEMOVE over that button and then one at the real cursor position. The app itself is
-/// never modified.
+/// The peek opens when the pointer rests on the collapsed "Show sidebar" button, so the reveal posts
+/// WM_MOUSEMOVEs over that button until the app reports the peek open. The app itself is never
+/// modified.
 /// </summary>
 sealed class SidebarAutoHide : IDisposable
 {
     const int PollMs = 25;
     const int EdgePx = 12;
-    // The app takes a moment to report the peek as open; don't re-post hovers inside that window.
-    const int PeekSettleMs = 300;
+    // The app opens the peek only after the pointer has rested on the button for ~100-200 ms
+    // (measured), so the hover is held up to this long, re-posted every tick until the peek is open.
+    const int PeekHoldMaxMs = 600;
 
     static readonly Condition ButtonCondition = new OrCondition(
         new PropertyCondition(AutomationElement.NameProperty, "Show sidebar", PropertyConditionFlags.IgnoreCase),
         new PropertyCondition(AutomationElement.NameProperty, "Hide sidebar", PropertyConditionFlags.IgnoreCase));
 
     readonly Thread _thread;
+    readonly IntPtr _handleOverlay;
     volatile bool _stop;
 
     IntPtr _hwnd;
     AutomationElement? _button;
-    long _lastPeekAt;
+    // Set while the hover is being held on the button; the time the hold started.
+    long? _holdStart;
     // Where the cursor was at the last peek: a cursor parked there doesn't reopen a peek closed with Esc.
     Native.POINT? _lastPeekPt;
 
     public volatile bool Enabled;
 
-    public SidebarAutoHide() => _thread = new Thread(Loop) { IsBackground = true, Name = "SidebarAutoHide" };
+    /// <param name="handleOverlay">The window covering the resize handle on the left edge; the mouse on it counts as being at the edge.</param>
+    public SidebarAutoHide(IntPtr handleOverlay)
+    {
+        _handleOverlay = handleOverlay;
+        _thread = new Thread(Loop) { IsBackground = true, Name = "SidebarAutoHide" };
+    }
 
     public void Start() => _thread.Start();
 
@@ -55,11 +63,13 @@ sealed class SidebarAutoHide : IDisposable
             catch (ElementNotAvailableException)
             {
                 _button = null;
+                _holdStart = null;
             }
             catch (Exception ex)
             {
                 Log.Write($"Tick failed: {ex.GetType().Name}: {ex.Message}");
                 _button = null;
+                _holdStart = null;
                 Thread.Sleep(1000);
             }
         }
@@ -69,22 +79,47 @@ sealed class SidebarAutoHide : IDisposable
     {
         if (_hwnd == IntPtr.Zero || !Native.IsWindow(_hwnd))
         {
-            _hwnd = FindClaudeWindow();
+            _hwnd = ClaudeWindow.Find();
             _button = null;
             if (_hwnd == IntPtr.Zero) return;
             Log.Write($"Claude window found: 0x{_hwnd:X}");
         }
 
         Native.GetCursorPos(out var pt);
-        bool overClaude = Native.GetAncestor(Native.WindowFromPoint(pt), Native.GA_ROOT) == _hwnd;
-        if (!overClaude || pt.X > Native.VisibleBounds(_hwnd).Left + EdgePx)
+        var underCursor = Native.GetAncestor(Native.WindowFromPoint(pt), Native.GA_ROOT);
+        bool onHandleOverlay = underCursor == _handleOverlay;
+        bool overClaude = underCursor == _hwnd || onHandleOverlay;
+        long now = Environment.TickCount64;
+
+        if (_holdStart is { } start)
+        {
+            // Real mouse moves at the edge (where the resize handle isn't covered) pull the app's pointer
+            // off the button, so keep putting it back until the peek is open. Once it is, the pointer is
+            // left there: posting the real edge position would put it on the resize handle, which can
+            // close the peek.
+            if (IsExpanded(_button!))
+            {
+                Log.Write($"Peek open after {now - start} ms");
+                _holdStart = null;
+            }
+            else if (!overClaude || now - start > PeekHoldMaxMs)
+            {
+                Log.Write($"Peek not opened after {now - start} ms (cursor {pt.X},{pt.Y}, over Claude: {overClaude})");
+                _holdStart = null;
+            }
+            else
+            {
+                PostButtonHover();
+            }
+            return;
+        }
+
+        // The overlay sits on the handle only while it is on the left edge; docked, the button check below bails out.
+        if (!onHandleOverlay && (!overClaude || pt.X > Native.VisibleBounds(_hwnd).Left + EdgePx))
         {
             _lastPeekPt = null;
             return;
         }
-
-        long now = Environment.TickCount64;
-        if (now - _lastPeekAt < PeekSettleMs) return;
         if (_lastPeekPt is { } last && last.X == pt.X && last.Y == pt.Y) return;
 
         _button ??= AutomationElement.FromHandle(_hwnd).FindFirst(TreeScope.Descendants, ButtonCondition);
@@ -93,20 +128,28 @@ sealed class SidebarAutoHide : IDisposable
         if (_button.Current.Name.StartsWith("Hide", StringComparison.OrdinalIgnoreCase)) return;
         if (IsExpanded(_button)) return;
 
-        var b = _button.Current.BoundingRectangle;
-        Log.Write($"Peek sidebar (cursor {pt.X},{pt.Y}, button {b})");
-        Native.PostMouseMove(_hwnd, (int)(b.Left + b.Width / 2), (int)(b.Top + b.Height / 2));
-        Native.PostMouseMove(_hwnd, pt.X, pt.Y);
-        _lastPeekAt = now;
+        Log.Write($"Peek sidebar (cursor {pt.X},{pt.Y})");
+        PostButtonHover();
+        _holdStart = now;
         _lastPeekPt = pt;
+    }
+
+    void PostButtonHover()
+    {
+        var b = _button!.Current.BoundingRectangle;
+        Native.PostMouseMove(_hwnd, (int)(b.Left + b.Width / 2), (int)(b.Top + b.Height / 2));
     }
 
     /// <summary>While collapsed, the button's aria-expanded reports whether the floating sidebar is open.</summary>
     static bool IsExpanded(AutomationElement button) =>
         button.TryGetCurrentPattern(ExpandCollapsePattern.Pattern, out var ec)
         && ((ExpandCollapsePattern)ec).Current.ExpandCollapseState == ExpandCollapseState.Expanded;
+}
 
-    static IntPtr FindClaudeWindow()
+static class ClaudeWindow
+{
+    /// <summary>The Claude Desktop main window; the Claude Code CLI shares the process name but has no window of this class.</summary>
+    public static IntPtr Find()
     {
         foreach (var p in Process.GetProcessesByName("claude"))
         {
@@ -135,6 +178,7 @@ static class Native
     [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT pt);
     [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
     [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hwnd, System.Text.StringBuilder name, int max);
     [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out RECT rect, int size);
     [DllImport("user32.dll")] static extern bool ScreenToClient(IntPtr hwnd, ref POINT pt);

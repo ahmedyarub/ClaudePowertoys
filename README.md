@@ -14,6 +14,11 @@ Right-click the **PT** icon in the notification area to use it.
   Clicking the app's Show sidebar button docks (pins) the sidebar as usual, and auto-hide leaves
   it alone until you hide it again.
 
+- **Remove sidebar resize handle** (on by default): covers the sidebar's resize handle with an
+  invisible window that takes the mouse, so it can't be dragged and can't close the floating
+  sidebar. It follows the handle: the left edge while the sidebar is collapsed, the sidebar's
+  right edge while it is docked. The app itself still has the handle; it just never sees the mouse.
+
 ## Build and run
 
 ```
