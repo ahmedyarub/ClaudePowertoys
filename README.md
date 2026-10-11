@@ -26,6 +26,12 @@ Right-click the **PT** icon in the notification area to use it.
   in the last 8 hours (`RecentSessionHours` in `settings.json`); the session on screen is always
   listed first. Sessions are opened through the app's `claude://claude.ai/epitaxy/<id>` links.
 
+- **Ctrl+Enter sends now** (on by default): Ctrl+Enter in Claude sends your message right away,
+  stopping the current reply, by pressing the app's own "Send now" on the queued message. With
+  the prompt box empty it sends a message that is already queued. The key still reaches the app
+  first, so when Claude is idle it is an ordinary send. Ctrl+Enter inside another text field
+  (the Files editor, a dialog) is left alone.
+
 ## Build and run
 
 ```

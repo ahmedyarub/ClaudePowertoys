@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using static ClaudePowertoys.KeyboardHook;
 
 namespace ClaudePowertoys;
 
@@ -12,15 +13,10 @@ namespace ClaudePowertoys;
 /// </summary>
 sealed class SessionSwitcher : IDisposable
 {
-    const int WH_KEYBOARD_LL = 13;
-    const int WM_KEYDOWN = 0x100, WM_KEYUP = 0x101, WM_SYSKEYDOWN = 0x104, WM_SYSKEYUP = 0x105;
-    const int VK_TAB = 0x09, VK_ESCAPE = 0x1B, VK_SHIFT = 0x10, VK_CONTROL = 0x11, VK_MENU = 0x12,
-        VK_LWIN = 0x5B, VK_RWIN = 0x5C, VK_LCONTROL = 0xA2, VK_RCONTROL = 0xA3;
     // A scan started when Ctrl goes down is usually done before Tab; don't rescan more often than this.
     const int RescanMs = 1000;
 
-    readonly HookProc _proc;
-    readonly IntPtr _hook;
+    readonly KeyboardHook _hook;
     readonly SwitcherForm _form = new();
     readonly object _gate = new();
 
@@ -38,35 +34,25 @@ sealed class SessionSwitcher : IDisposable
     public SessionSwitcher()
     {
         _ = _form.Handle;
-        _proc = HookCallback;
-        _hook = SetWindowsHookEx(WH_KEYBOARD_LL, _proc, GetModuleHandle(null), 0);
-        if (_hook == IntPtr.Zero) Log.Write($"Session switcher: keyboard hook failed ({Marshal.GetLastWin32Error()})");
+        _hook = new KeyboardHook("Session switcher", (message, vk) => Enabled && Handle(message, vk));
     }
 
     public void Dispose()
     {
-        if (_hook != IntPtr.Zero) UnhookWindowsHookEx(_hook);
+        _hook.Dispose();
         _form.Dispose();
     }
 
-    IntPtr HookCallback(int code, IntPtr wParam, IntPtr lParam)
-    {
-        if (code >= 0 && Enabled && Handle((int)wParam, Marshal.ReadInt32(lParam)))
-            return 1;
-        return CallNextHookEx(_hook, code, wParam, lParam);
-    }
-
-    /// <summary>Returns true to swallow the key. Must stay quick: Windows drops slow low-level hooks.</summary>
+    /// <summary>Returns true to swallow the key.</summary>
     bool Handle(int message, int vk)
     {
-        bool down = message is WM_KEYDOWN or WM_SYSKEYDOWN;
-        bool up = message is WM_KEYUP or WM_SYSKEYUP;
+        bool down = IsDown(message);
 
         if (_shown != null)
         {
             if (vk == VK_TAB)
             {
-                if (down) Move(KeyDown(VK_SHIFT) ? -1 : 1);
+                if (down) Move(KeyHeld(VK_SHIFT) ? -1 : 1);
                 return true;
             }
             if (vk == VK_ESCAPE)
@@ -74,7 +60,7 @@ sealed class SessionSwitcher : IDisposable
                 if (down) Close(switchTo: null);
                 return true;
             }
-            if (up && vk is VK_LCONTROL or VK_RCONTROL or VK_CONTROL)
+            if (IsUp(message) && vk is VK_LCONTROL or VK_RCONTROL or VK_CONTROL)
             {
                 Close(switchTo: _shown.Count > 0 ? _shown[_selected] : null);
                 return false;
@@ -85,12 +71,12 @@ sealed class SessionSwitcher : IDisposable
         if (!down) return false;
         if (vk is VK_LCONTROL or VK_RCONTROL or VK_CONTROL)
         {
-            if (ClaudeInFront()) ScanInBackground();
+            if (ClaudeWindow.IsInFront()) ScanInBackground();
             return false;
         }
-        if (vk == VK_TAB && KeyDown(VK_CONTROL) && !KeyDown(VK_MENU) && !KeyDown(VK_LWIN) && !KeyDown(VK_RWIN) && ClaudeInFront())
+        if (vk == VK_TAB && KeyHeld(VK_CONTROL) && !KeyHeld(VK_MENU) && !KeyHeld(VK_LWIN) && !KeyHeld(VK_RWIN) && ClaudeWindow.IsInFront())
         {
-            Open(backwards: KeyDown(VK_SHIFT));
+            Open(backwards: KeyHeld(VK_SHIFT));
             return true;
         }
         return false;
@@ -161,32 +147,6 @@ sealed class SessionSwitcher : IDisposable
         _selected = found.Count < 2 ? 0 : 1;
         _form.ShowList(ClaudeWindow.Find(), found, _selected);
     }
-
-    IntPtr _lastForeground;
-    bool _lastForegroundIsClaude;
-
-    /// <summary>Cached per foreground window: the process lookup is too slow to run on every Ctrl press.</summary>
-    bool ClaudeInFront()
-    {
-        var fg = GetForegroundWindow();
-        if (fg != _lastForeground)
-        {
-            _lastForeground = fg;
-            _lastForegroundIsClaude = fg != IntPtr.Zero && fg == ClaudeWindow.Find();
-        }
-        return _lastForegroundIsClaude;
-    }
-
-    static bool KeyDown(int vk) => GetAsyncKeyState(vk) < 0;
-
-    delegate IntPtr HookProc(int code, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll", SetLastError = true)] static extern IntPtr SetWindowsHookEx(int id, HookProc proc, IntPtr module, uint threadId);
-    [DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr hook);
-    [DllImport("user32.dll")] static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr wParam, IntPtr lParam);
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr GetModuleHandle(string? name);
-    [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vk);
-    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
 }
 
 /// <summary>The session list: topmost, never activated, drawn by hand so it scales with the monitor's DPI.</summary>

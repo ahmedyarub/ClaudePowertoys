@@ -161,6 +161,26 @@ static class ClaudeWindow
         }
         return IntPtr.Zero;
     }
+
+    static IntPtr _lastForeground;
+    static bool _lastForegroundIsClaude;
+
+    /// <summary>
+    /// Whether Claude's window is the foreground window. Cached per foreground window, since Find is too
+    /// slow for every key press. Only called from keyboard hooks, which all run on the UI thread.
+    /// </summary>
+    public static bool IsInFront()
+    {
+        var fg = GetForegroundWindow();
+        if (fg != _lastForeground)
+        {
+            _lastForeground = fg;
+            _lastForegroundIsClaude = fg != IntPtr.Zero && fg == Find();
+        }
+        return _lastForegroundIsClaude;
+    }
+
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
 }
 
 static class Native

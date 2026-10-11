@@ -8,6 +8,7 @@ sealed class Settings
     public bool AutoHideSidebar { get; set; }
     public bool RemoveResizeHandle { get; set; } = true;
     public bool SessionSwitcher { get; set; } = true;
+    public bool CtrlEnterSendsNow { get; set; } = true;
     /// <summary>How far back a session's last activity may be for the Ctrl+Tab list.</summary>
     public double RecentSessionHours { get; set; } = 8;
 

@@ -9,6 +9,7 @@ sealed class TrayApp : ApplicationContext
     readonly Settings _settings = Settings.Load();
     readonly ResizeHandleBlocker _handleBlocker = new();
     readonly SessionSwitcher _switcher = new();
+    readonly SendNowShortcut _sendNow = new();
     readonly SidebarAutoHide _autoHide;
 
     public TrayApp()
@@ -31,6 +32,11 @@ sealed class TrayApp : ApplicationContext
             _settings.SessionSwitcher = on;
             _switcher.Enabled = on;
         }));
+        menu.Items.Add(Toggle("Ctrl+Enter sends now", _settings.CtrlEnterSendsNow, on =>
+        {
+            _settings.CtrlEnterSendsNow = on;
+            _sendNow.Enabled = on;
+        }));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
 
@@ -48,7 +54,9 @@ sealed class TrayApp : ApplicationContext
         _handleBlocker.Start();
         _switcher.Enabled = _settings.SessionSwitcher;
         _switcher.RecentWindow = TimeSpan.FromHours(_settings.RecentSessionHours);
-        Log.Write($"Started, auto-hide sidebar {OnOff(_settings.AutoHideSidebar)}, remove resize handle {OnOff(_settings.RemoveResizeHandle)}, session switcher {OnOff(_settings.SessionSwitcher)}");
+        _sendNow.Enabled = _settings.CtrlEnterSendsNow;
+        Log.Write($"Started, auto-hide sidebar {OnOff(_settings.AutoHideSidebar)}, remove resize handle {OnOff(_settings.RemoveResizeHandle)}, " +
+            $"session switcher {OnOff(_settings.SessionSwitcher)}, Ctrl+Enter sends now {OnOff(_settings.CtrlEnterSendsNow)}");
     }
 
     ToolStripMenuItem Toggle(string text, bool initial, Action<bool> apply)
@@ -70,6 +78,7 @@ sealed class TrayApp : ApplicationContext
         _autoHide.Dispose();
         _handleBlocker.Dispose();
         _switcher.Dispose();
+        _sendNow.Dispose();
         _icon.Visible = false;
         _icon.Dispose();
         Log.Write("Exited");
