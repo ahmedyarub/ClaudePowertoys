@@ -63,7 +63,8 @@ Right-click the **PT** icon in the notification area to use it.
   and the clipboard is left alone.
 - **Ctrl+Shift+S: search all sessions** (on by default): with Claude in front, opens a search
   over every session's prompts and Claude's replies (archived sessions included; every word must
-  appear). Up / Down pick a result, Enter opens the session and scrolls to the prompt the match
+  appear). Sessions whose title matches come first, then matches in the conversations; matched
+  words are highlighted. Up / Down pick a result, Enter opens the session and scrolls to the prompt the match
   belongs to, Esc closes. The hotkey is registered only while Claude is the active window, so
   other apps keep Ctrl+Shift+S (Ctrl+Shift+F is the app's own Files toggle).
 - **Alt+Up: earlier prompts** (on by default): in Claude's prompt box, hold Alt and press Up to

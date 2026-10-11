@@ -146,12 +146,68 @@ sealed class SearchWindow : Form
 
         int pad = e.Bounds.Height / 6, half = e.Bounds.Height / 2;
         using var small = new Font(_results.Font.FontFamily, _results.Font.Size * 0.85f, GraphicsUnit.Pixel);
+        var query = _results.Tag as string ?? "";
+        var terms = SearchIndex.Terms(query);
         var when = DateTimeOffset.FromUnixTimeMilliseconds(h.LastActivityAt).LocalDateTime.ToString("MMM d");
-        var head = $"{h.Session.Title}  ·  {(h.FromUser ? "You" : "Claude")}  ·  {h.Session.Folder}  ·  {when}{(h.IsArchived ? "  ·  archived" : "")}";
-        var flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
-        TextRenderer.DrawText(e.Graphics, head, small, new Rectangle(e.Bounds.X + pad, e.Bounds.Y, e.Bounds.Width - pad * 2, half), DimText, flags);
-        var snippet = SearchIndex.Snippet(h.Text, _results.Tag as string ?? "", SnippetChars);
-        TextRenderer.DrawText(e.Graphics, snippet, _results.Font, new Rectangle(e.Bounds.X + pad, e.Bounds.Y + half - pad / 2, e.Bounds.Width - pad * 2, half), RowText, flags);
+        var top = new RectangleF(e.Bounds.X + pad, e.Bounds.Y, e.Bounds.Width - pad * 2, half);
+        var bottom = new RectangleF(e.Bounds.X + pad, e.Bounds.Y + half - pad / 2f, e.Bounds.Width - pad * 2, half);
+        var archived = h.IsArchived ? "  ·  archived" : "";
+
+        if (h.InTitle)
+        {
+            // A title match: the title itself is the result.
+            DrawHighlighted(e.Graphics, $"Session title  ·  {h.Session.Folder}  ·  {when}{archived}", small, top, DimText, []);
+            DrawHighlighted(e.Graphics, h.Session.Title, _results.Font, bottom, RowText, terms);
+            return;
+        }
+        DrawHighlighted(e.Graphics, $"{h.Session.Title}  ·  {(h.FromUser ? "You" : "Claude")}  ·  {h.Session.Folder}  ·  {when}{archived}", small, top, DimText, terms);
+        DrawHighlighted(e.Graphics, SearchIndex.Snippet(h.Text, query, SnippetChars), _results.Font, bottom, RowText, terms);
+    }
+
+    static readonly StringFormat Measure = new(StringFormat.GenericTypographic)
+    {
+        FormatFlags = StringFormatFlags.MeasureTrailingSpaces | StringFormatFlags.NoWrap,
+        LineAlignment = StringAlignment.Center,
+    };
+
+    /// <summary>One line of text, every occurrence of a term on a highlight; cut with "…" at the right edge.</summary>
+    static void DrawHighlighted(Graphics g, string text, Font font, RectangleF rect, Color color, string[] terms)
+    {
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+        // Which characters fall inside a match of any term.
+        var hit = new bool[text.Length];
+        foreach (var term in terms)
+            for (int at = text.IndexOf(term, StringComparison.OrdinalIgnoreCase); at >= 0; at = text.IndexOf(term, at + 1, StringComparison.OrdinalIgnoreCase))
+                for (int k = at; k < at + term.Length; k++) hit[k] = true;
+
+        using var plain = new SolidBrush(color);
+        using var marked = new SolidBrush(Color.White);
+        using var mark = new SolidBrush(Color.FromArgb(150, Highlight));
+        float x = rect.X, ellipsis = g.MeasureString("…", font, PointF.Empty, Measure).Width;
+        for (int start = 0; start < text.Length;)
+        {
+            int end = start;
+            while (end < text.Length && hit[end] == hit[start]) end++;
+            var run = text[start..end];
+            float width = g.MeasureString(run, font, PointF.Empty, Measure).Width;
+            bool last = x + width > rect.Right;
+            if (last)
+            {
+                // Shorten the run to what fits before the ellipsis.
+                while (run.Length > 0 && x + g.MeasureString(run, font, PointF.Empty, Measure).Width > rect.Right - ellipsis) run = run[..^1];
+                width = g.MeasureString(run, font, PointF.Empty, Measure).Width;
+            }
+            var box = new RectangleF(x, rect.Y, width, rect.Height);
+            if (hit[start]) g.FillRectangle(mark, x, rect.Y + rect.Height * 0.15f, width, rect.Height * 0.7f);
+            g.DrawString(run, font, hit[start] ? marked : plain, box, Measure);
+            x += width;
+            if (last)
+            {
+                g.DrawString("…", font, plain, new RectangleF(x, rect.Y, ellipsis + 2, rect.Height), Measure);
+                return;
+            }
+            start = end;
+        }
     }
 
     void OpenSelected()
@@ -159,7 +215,7 @@ sealed class SearchWindow : Form
         if (_results.SelectedIndex < 0 || _results.SelectedIndex >= _hits.Count) return;
         var hit = _hits[_results.SelectedIndex];
         Hide();
-        Log.Write($"Search: opening '{hit.Session.Title}' at prompt {hit.PromptIndex + 1}");
+        Log.Write(hit.InTitle ? $"Search: opening '{hit.Session.Title}' (title match)" : $"Search: opening '{hit.Session.Title}' at prompt {hit.PromptIndex + 1}");
         ClaudeLinks.Open(hit.Session.Link);
         if (hit.PromptIndex < 0) return;
         ThreadPool.QueueUserWorkItem(_ => JumpWhenOpen(hit));

@@ -2,7 +2,8 @@ using System.IO;
 
 namespace ClaudePowertoys;
 
-sealed record SearchHit(SessionInfo Session, bool IsArchived, long LastActivityAt, bool FromUser, string Text, int PromptIndex);
+/// <param name="InTitle">The session's title matched; Text is the title and there is no prompt to scroll to.</param>
+sealed record SearchHit(SessionInfo Session, bool IsArchived, long LastActivityAt, bool FromUser, string Text, int PromptIndex, bool InTitle = false);
 
 /// <summary>
 /// Every session's prompts and Claude's replies (not tool calls, results or thinking), for searching.
@@ -16,17 +17,28 @@ static class SearchIndex
         new(StringComparer.OrdinalIgnoreCase);
     static readonly object Gate = new();
 
-    /// <summary>Parts holding every word of the query (any case), newest session first, latest part first.</summary>
+    public static string[] Terms(string query) => query.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>
+    /// Sessions whose title holds every word of the query (any case) first, newest first; then the
+    /// prompts and replies holding every word, newest session first, latest part first.
+    /// </summary>
     public static List<SearchHit> Search(string query)
     {
-        var terms = query.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var terms = Terms(query);
         if (terms.Length == 0) return [];
 
-        var hits = new List<SearchHit>();
+        var sessions = RecentSessions.All();
+        var hits = sessions
+            .Where(s => terms.All(t => s.Session.Title.Contains(t, StringComparison.OrdinalIgnoreCase)))
+            .Select(s => new SearchHit(s.Session, s.IsArchived, s.LastActivityAt, false, s.Session.Title, -1, InTitle: true))
+            .Take(MaxHits)
+            .ToList();
         lock (Gate)
         {
-            foreach (var (session, archived, activity) in RecentSessions.All())
+            foreach (var (session, archived, activity) in sessions)
             {
+                if (hits.Count >= MaxHits) break;
                 var parts = PartsOf(session.CliSessionId);
                 for (int i = parts.Count - 1; i >= 0 && hits.Count < MaxHits; i--)
                 {
@@ -34,7 +46,6 @@ static class SearchIndex
                     if (terms.All(t => p.Text.Contains(t, StringComparison.OrdinalIgnoreCase)))
                         hits.Add(new SearchHit(session, archived, activity, p.FromUser, p.Text, p.PromptIndex));
                 }
-                if (hits.Count >= MaxHits) break;
             }
         }
         return hits;
