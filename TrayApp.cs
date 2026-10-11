@@ -16,6 +16,7 @@ sealed class TrayApp : ApplicationContext
     readonly SnippetInserter _snippets = new();
     readonly PromptHistoryRecall _history = new();
     readonly BookmarkShortcut _bookmarks = new();
+    readonly BookmarkManager _bookmarkManager = new();
     readonly SidebarAutoHide _autoHide;
     readonly GlobalHotkey _needsInputHotkey;
     readonly GlobalHotkey _newSessionHotkey;
@@ -105,6 +106,7 @@ sealed class TrayApp : ApplicationContext
             _settings.Bookmarks = on;
             _bookmarks.Enabled = on;
         }));
+        BookmarkMenu.OpenManager = _bookmarkManager.ShowManager;
         var bookmarksMenu = new ToolStripMenuItem("Bookmarks");
         // Re-read on every opening: Ctrl+D changes the list.
         bookmarksMenu.DropDownOpening += (_, _) =>
@@ -146,11 +148,10 @@ sealed class TrayApp : ApplicationContext
         };
         _icon.MouseClick += (_, e) =>
         {
-            if (e.Button != MouseButtons.Left) return;
-            // The first waiting session, or the app's own list when there is none to open.
-            var link = _waiting.Count > 0 ? _waiting[0].Session.Link : ClaudeLinks.NeedsInput;
-            Log.Write($"Tray click: opening {(_waiting.Count > 0 ? $"'{_waiting[0].Session.Title}'" : "sessions waiting for you")}");
-            ClaudeLinks.Open(link);
+            // Only ever goes to a session needing attention; with none, a click does nothing.
+            if (e.Button != MouseButtons.Left || _waiting.Count == 0) return;
+            Log.Write($"Tray click: opening '{_waiting[0].Session.Title}'");
+            ClaudeLinks.Open(_waiting[0].Session.Link);
         };
 
         _autoHide.Enabled = _settings.AutoHideSidebar;
@@ -216,6 +217,7 @@ sealed class TrayApp : ApplicationContext
         _snippets.Dispose();
         _history.Dispose();
         _bookmarks.Dispose();
+        _bookmarkManager.Dispose();
         _needsInputHotkey.Dispose();
         _newSessionHotkey.Dispose();
         _foreground.Dispose();

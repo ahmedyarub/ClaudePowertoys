@@ -8,61 +8,167 @@ namespace ClaudePowertoys;
 
 /// <param name="Text">The message's text (its start, for a long one), as the transcript has it.</param>
 /// <param name="PromptIndex">The prompt the message is, or the prompt Claude's reply answers; for scrolling back to it.</param>
-sealed record Bookmark(string SessionId, string CliSessionId, string SessionTitle, bool FromUser, string Text, int PromptIndex, long AddedAt);
+/// <param name="Name">What the bookmark is called; the message's first line until renamed.</param>
+/// <param name="Folder">The folder it is filed in; "" is Unsorted.</param>
+sealed record Bookmark(string SessionId, string CliSessionId, string SessionTitle, bool FromUser, string Text, int PromptIndex, long AddedAt,
+    string Id = "", string Name = "", string Folder = "")
+{
+    public static string DefaultName(string text)
+    {
+        var line = ConversationView.Normalize(text.Split('\n')[0]);
+        return line.Length <= 90 ? line : line[..89] + "…";
+    }
+}
 
-/// <summary>Bookmarked messages, newest first, in %APPDATA%\ClaudePowertoys\bookmarks.json.</summary>
+/// <summary>
+/// Bookmarked messages and their folders, in %APPDATA%\ClaudePowertoys\bookmarks.json. Bookmarks are
+/// kept newest first. Every change raises Changed, so an open manager can refresh.
+/// </summary>
 static class BookmarkStore
 {
+    sealed class Data
+    {
+        public List<string> Folders { get; set; } = [];
+        public List<Bookmark> Bookmarks { get; set; } = [];
+    }
+
     static readonly string FilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ClaudePowertoys", "bookmarks.json");
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
     static readonly object Gate = new();
 
-    public static List<Bookmark> Load()
-    {
-        lock (Gate)
-        {
-            if (!File.Exists(FilePath)) return [];
-            try { return JsonSerializer.Deserialize<List<Bookmark>>(File.ReadAllText(FilePath)) ?? []; }
-            catch (JsonException ex)
-            {
-                Log.Write($"bookmarks.json is not valid JSON: {ex.Message}");
-                return [];
-            }
-        }
-    }
+    /// <summary>Raised after every change, on the thread that made it.</summary>
+    public static event Action? Changed;
 
-    /// <summary>Adds the bookmark, or removes it when that message is already bookmarked. Returns whether it was added.</summary>
+    public static List<Bookmark> Load() => Read().Bookmarks;
+
+    public static List<string> Folders() => Read().Folders;
+
+    /// <summary>Adds the bookmark (to Unsorted), or removes it when that message is already bookmarked. Returns whether it was added.</summary>
     public static bool Toggle(Bookmark bookmark)
     {
-        lock (Gate)
+        bool added = false;
+        Change(d =>
         {
-            var all = Load();
-            int existing = all.FindIndex(b => Same(b, bookmark));
-            if (existing >= 0) all.RemoveAt(existing);
-            else all.Insert(0, bookmark);
-            Save(all);
-            return existing < 0;
-        }
+            int existing = d.Bookmarks.FindIndex(b => Same(b, bookmark));
+            if (existing >= 0) d.Bookmarks.RemoveAt(existing);
+            else d.Bookmarks.Insert(0, bookmark with { Id = Guid.NewGuid().ToString("N"), Name = Bookmark.DefaultName(bookmark.Text) });
+            added = existing < 0;
+        });
+        return added;
     }
 
-    public static void Remove(Bookmark bookmark)
+    public static void Remove(IEnumerable<string> ids)
     {
-        lock (Gate)
+        var set = ids.ToHashSet();
+        Change(d => d.Bookmarks.RemoveAll(b => set.Contains(b.Id)));
+    }
+
+    public static void Rename(string id, string name) =>
+        Change(d => Replace(d, id, b => b with { Name = name.Trim() == "" ? Bookmark.DefaultName(b.Text) : name.Trim() }));
+
+    public static void Move(IEnumerable<string> ids, string folder)
+    {
+        var set = ids.ToHashSet();
+        Change(d =>
         {
-            var all = Load();
-            all.RemoveAll(b => Same(b, bookmark));
-            Save(all);
-        }
+            for (int i = 0; i < d.Bookmarks.Count; i++)
+                if (set.Contains(d.Bookmarks[i].Id)) d.Bookmarks[i] = d.Bookmarks[i] with { Folder = folder };
+        });
+    }
+
+    /// <summary>Adds a folder named <paramref name="name"/>, numbered if taken; returns the name used.</summary>
+    public static string AddFolder(string name)
+    {
+        string used = name;
+        Change(d =>
+        {
+            for (int n = 2; d.Folders.Contains(used, StringComparer.OrdinalIgnoreCase); n++) used = $"{name} {n}";
+            d.Folders.Add(used);
+        });
+        return used;
+    }
+
+    /// <summary>Renames a folder; false when another folder already has the name.</summary>
+    public static bool RenameFolder(string from, string to)
+    {
+        to = to.Trim();
+        bool done = false;
+        Change(d =>
+        {
+            if (to == "" || d.Folders.Any(f => f.Equals(to, StringComparison.OrdinalIgnoreCase) && f != from)) return;
+            d.Folders[d.Folders.IndexOf(from)] = to;
+            for (int i = 0; i < d.Bookmarks.Count; i++)
+                if (d.Bookmarks[i].Folder == from) d.Bookmarks[i] = d.Bookmarks[i] with { Folder = to };
+            done = true;
+        });
+        return done;
+    }
+
+    /// <summary>Deletes a folder; its bookmarks move to Unsorted rather than being deleted.</summary>
+    public static void DeleteFolder(string folder) => Change(d =>
+    {
+        d.Folders.Remove(folder);
+        for (int i = 0; i < d.Bookmarks.Count; i++)
+            if (d.Bookmarks[i].Folder == folder) d.Bookmarks[i] = d.Bookmarks[i] with { Folder = "" };
+    });
+
+    static void Replace(Data d, string id, Func<Bookmark, Bookmark> change)
+    {
+        int i = d.Bookmarks.FindIndex(b => b.Id == id);
+        if (i >= 0) d.Bookmarks[i] = change(d.Bookmarks[i]);
     }
 
     static bool Same(Bookmark a, Bookmark b) =>
         a.CliSessionId == b.CliSessionId && a.FromUser == b.FromUser && a.PromptIndex == b.PromptIndex && a.Text == b.Text;
 
-    static void Save(List<Bookmark> all)
+    static void Change(Action<Data> change)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-        File.WriteAllText(FilePath, JsonSerializer.Serialize(all, Json));
+        lock (Gate)
+        {
+            var d = Read();
+            change(d);
+            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+            // The first write in the folders format keeps the old plain list beside it.
+            var backup = Path.ChangeExtension(FilePath, ".v1.json");
+            if (File.Exists(FilePath) && !File.Exists(backup) && File.ReadAllText(FilePath).TrimStart().StartsWith('['))
+                File.Copy(FilePath, backup);
+            File.WriteAllText(FilePath, JsonSerializer.Serialize(d, Json));
+        }
+        Changed?.Invoke();
+    }
+
+    /// <summary>Reads the file; the first version was a plain list of bookmarks without ids, names or folders.</summary>
+    static Data Read()
+    {
+        lock (Gate)
+        {
+            if (!File.Exists(FilePath)) return new Data();
+            try
+            {
+                var text = File.ReadAllText(FilePath);
+                var d = text.TrimStart().StartsWith('[')
+                    ? new Data { Bookmarks = JsonSerializer.Deserialize<List<Bookmark>>(text) ?? [] }
+                    : JsonSerializer.Deserialize<Data>(text) ?? new Data();
+                for (int i = 0; i < d.Bookmarks.Count; i++)
+                {
+                    var b = d.Bookmarks[i];
+                    if (b.Id == "" || b.Name == "" || b.Folder == null)
+                        d.Bookmarks[i] = b with
+                        {
+                            Id = b.Id == "" ? Guid.NewGuid().ToString("N") : b.Id,
+                            Name = b.Name == "" ? Bookmark.DefaultName(b.Text) : b.Name,
+                            Folder = b.Folder ?? "",
+                        };
+                }
+                return d;
+            }
+            catch (JsonException ex)
+            {
+                Log.Write($"bookmarks.json is not valid JSON: {ex.Message}");
+                return new Data();
+            }
+        }
     }
 }
 
@@ -152,30 +258,29 @@ sealed class BookmarkShortcut : IDisposable
 /// <summary>Bookmark menus (tray, outline button) and opening a bookmark.</summary>
 static class BookmarkMenu
 {
+    /// <summary>Opens the bookmark manager; set by the tray, which owns it.</summary>
+    public static Action? OpenManager;
+
+    /// <summary>Folders as submenus, then Unsorted bookmarks, then Manage bookmarks….</summary>
     public static void AddItems(ToolStripItemCollection items)
     {
         var all = BookmarkStore.Load();
-        if (all.Count == 0)
+        foreach (var folder in BookmarkStore.Folders())
         {
-            items.Add(new ToolStripMenuItem("No bookmarks: point at a message in Claude and press Ctrl+D") { Enabled = false });
-            return;
+            var sub = new ToolStripMenuItem($"📁  {folder}".Replace("&", "&&"));
+            foreach (var b in all.Where(b => b.Folder == folder)) sub.DropDownItems.Add(Item(b));
+            if (sub.DropDownItems.Count == 0) sub.DropDownItems.Add(new ToolStripMenuItem("(empty)") { Enabled = false });
+            items.Add(sub);
         }
-        foreach (var b in all)
-            items.Add(new ToolStripMenuItem(Label(b), null, (_, _) => Open(b)) { ToolTipText = b.Text });
-
-        var remove = new ToolStripMenuItem("Remove a bookmark");
-        foreach (var b in all)
-            remove.DropDownItems.Add(new ToolStripMenuItem(Label(b), null, (_, _) => BookmarkStore.Remove(b)));
+        foreach (var b in all.Where(b => b.Folder == "")) items.Add(Item(b));
+        if (all.Count == 0)
+            items.Add(new ToolStripMenuItem("No bookmarks: point at a message in Claude and press Ctrl+D") { Enabled = false });
         items.Add(new ToolStripSeparator());
-        items.Add(remove);
+        items.Add(new ToolStripMenuItem("Manage bookmarks…", null, (_, _) => OpenManager?.Invoke()));
     }
 
-    static string Label(Bookmark b)
-    {
-        var line = ConversationView.Normalize(b.Text.Split('\n')[0]);
-        if (line.Length > 70) line = line[..69] + "…";
-        return $"★  {b.SessionTitle}  ·  {(b.FromUser ? "You" : "Claude")}:  {line}".Replace("&", "&&");
-    }
+    static ToolStripMenuItem Item(Bookmark b) =>
+        new($"★  {b.Name}  ·  {b.SessionTitle}".Replace("&", "&&"), null, (_, _) => Open(b)) { ToolTipText = b.Text };
 
     /// <summary>Opens the session and, once it is on screen, scrolls to the message.</summary>
     public static void Open(Bookmark b)

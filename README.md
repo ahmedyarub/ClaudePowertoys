@@ -47,7 +47,8 @@ Right-click the **PT** icon in the notification area to use it.
 - **Session status**: the Ctrl+Tab list shows each session's state (needs you / new reply /
   working / idle) and context size, and the tray icon shows a red badge with the number of
   sessions waiting for you (Claude asked a question or wants a plan approved, or finished a turn
-  you haven't seen), naming them in its tooltip. Left-click the icon to open the first one.
+  you haven't seen), naming them in its tooltip. Left-click the icon to open the first one; with
+  none waiting, a click does nothing.
   Working sessions show how long the current turn has run ("working 12 min"), in the list and in
   the tooltip.
   States come from each session's transcript, read as it grows. Permission prompts aren't in the
@@ -69,9 +70,14 @@ Right-click the **PT** icon in the notification area to use it.
   other apps keep Ctrl+Shift+S (Ctrl+Shift+F is the app's own Files toggle).
 - **Ctrl+D: bookmarks** (on by default): point at any message in a conversation, yours or
   Claude's, and press Ctrl+D (again to remove); a "★ Bookmarked" note confirms it. The tray's
-  Bookmarks menu, also on the outline button's right-click menu, lists them newest first; picking
-  one opens the session and scrolls to the message. Stored in
+  Bookmarks menu, also on the outline button's right-click menu, lists your folders and unsorted
+  bookmarks; picking one opens the session and scrolls to the message. Stored in
   `%APPDATA%\ClaudePowertoys\bookmarks.json`. Left alone in other text fields (the terminal).
+- **Bookmark manager** (Bookmarks > Manage bookmarks…): like a browser's. Folders on the left (All
+  bookmarks, Unsorted, yours), bookmarks on the right with Name, Session, By and Added columns
+  (click a header to sort), and a search box across all folders. Double-click or Enter opens, F2
+  renames, Delete removes, drag onto a folder to move; right-click for Move to, Copy message text
+  and folder actions. Deleting a folder moves its bookmarks to Unsorted.
 - **Alt+Up: earlier prompts** (on by default): in Claude's prompt box, hold Alt and press Up to
   list your earlier prompts (newest first, every Claude Code session of the last 30 days); Up /
   Down move while Alt is held, Esc cancels, and releasing Alt types the chosen one at the cursor.
