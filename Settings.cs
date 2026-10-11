@@ -7,6 +7,7 @@ sealed class Settings
 {
     public bool AutoHideSidebar { get; set; }
     public bool RemoveResizeHandle { get; set; } = true;
+    public bool SessionSwitcher { get; set; } = true;
 
     static readonly string Dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ClaudePowertoys");
     static readonly string FilePath = Path.Combine(Dir, "settings.json");

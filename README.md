@@ -19,6 +19,13 @@ Right-click the **PT** icon in the notification area to use it.
   sidebar. It follows the handle: the left edge while the sidebar is collapsed, the sidebar's
   right edge while it is docked. The app itself still has the handle; it just never sees the mouse.
 
+- **Ctrl+Tab session switcher** (on by default): with Claude in front, hold Ctrl and press Tab
+  to list the running Code sessions, most recently used first, with the previous one selected.
+  Tab / Shift+Tab move the selection, Esc cancels, releasing Ctrl switches. The app's own Ctrl+Tab
+  (Go > Next Session) is suppressed while this is on. "Running" means the app has a Claude Code
+  process for the session; sessions are opened through the app's `claude://claude.ai/epitaxy/<id>`
+  links.
+
 ## Build and run
 
 ```

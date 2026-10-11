@@ -8,6 +8,7 @@ sealed class TrayApp : ApplicationContext
     readonly NotifyIcon _icon;
     readonly Settings _settings = Settings.Load();
     readonly ResizeHandleBlocker _handleBlocker = new();
+    readonly SessionSwitcher _switcher = new();
     readonly SidebarAutoHide _autoHide;
 
     public TrayApp()
@@ -25,6 +26,11 @@ sealed class TrayApp : ApplicationContext
             _settings.RemoveResizeHandle = on;
             _handleBlocker.Enabled = on;
         }));
+        menu.Items.Add(Toggle("Ctrl+Tab session switcher", _settings.SessionSwitcher, on =>
+        {
+            _settings.SessionSwitcher = on;
+            _switcher.Enabled = on;
+        }));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
 
@@ -40,7 +46,8 @@ sealed class TrayApp : ApplicationContext
         _autoHide.Start();
         _handleBlocker.Enabled = _settings.RemoveResizeHandle;
         _handleBlocker.Start();
-        Log.Write($"Started, auto-hide sidebar {OnOff(_settings.AutoHideSidebar)}, remove resize handle {OnOff(_settings.RemoveResizeHandle)}");
+        _switcher.Enabled = _settings.SessionSwitcher;
+        Log.Write($"Started, auto-hide sidebar {OnOff(_settings.AutoHideSidebar)}, remove resize handle {OnOff(_settings.RemoveResizeHandle)}, session switcher {OnOff(_settings.SessionSwitcher)}");
     }
 
     ToolStripMenuItem Toggle(string text, bool initial, Action<bool> apply)
@@ -61,6 +68,7 @@ sealed class TrayApp : ApplicationContext
     {
         _autoHide.Dispose();
         _handleBlocker.Dispose();
+        _switcher.Dispose();
         _icon.Visible = false;
         _icon.Dispose();
         Log.Write("Exited");
