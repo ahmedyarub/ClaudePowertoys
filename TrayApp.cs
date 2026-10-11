@@ -12,10 +12,16 @@ sealed class TrayApp : ApplicationContext
     readonly SendNowShortcut _sendNow = new();
     readonly OutlineButton _outline = new();
     readonly SidebarAutoHide _autoHide;
+    readonly GlobalHotkey _needsInputHotkey;
 
     public TrayApp()
     {
         _autoHide = new SidebarAutoHide(_handleBlocker.OverlayHandle);
+        _needsInputHotkey = new GlobalHotkey(_settings.NeedsInputHotkeyKeys, () =>
+        {
+            Log.Write($"{_settings.NeedsInputHotkeyKeys}: opening sessions waiting for you");
+            ClaudeLinks.Open(ClaudeLinks.NeedsInput);
+        });
 
         var menu = new ContextMenuStrip();
         menu.Items.Add(Toggle("Auto-hide sidebar", _settings.AutoHideSidebar, on =>
@@ -43,6 +49,15 @@ sealed class TrayApp : ApplicationContext
             _settings.OutlineButton = on;
             _outline.Enabled = on;
         }));
+        var hotkeyText = $"{_settings.NeedsInputHotkeyKeys}: sessions waiting for you";
+        ToolStripMenuItem? hotkeyItem = null;
+        hotkeyItem = Toggle(hotkeyText, _settings.NeedsInputHotkey, on =>
+        {
+            _settings.NeedsInputHotkey = on;
+            _needsInputHotkey.Enabled = on;
+            hotkeyItem!.Text = on && !_needsInputHotkey.Enabled ? hotkeyText + " (taken by another program)" : hotkeyText;
+        });
+        menu.Items.Add(hotkeyItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
 
@@ -63,9 +78,10 @@ sealed class TrayApp : ApplicationContext
         _sendNow.Enabled = _settings.CtrlEnterSendsNow;
         _outline.Enabled = _settings.OutlineButton;
         _outline.Start();
-        Log.Write($"Started, auto-hide sidebar {OnOff(_settings.AutoHideSidebar)}, remove resize handle {OnOff(_settings.RemoveResizeHandle)}, " +
-            $"session switcher {OnOff(_settings.SessionSwitcher)}, Ctrl+Enter sends now {OnOff(_settings.CtrlEnterSendsNow)}, " +
-            $"outline button {OnOff(_settings.OutlineButton)}");
+        _needsInputHotkey.Enabled = _settings.NeedsInputHotkey;
+        if (_settings.NeedsInputHotkey && !_needsInputHotkey.Enabled) hotkeyItem.Text = hotkeyText + " (taken by another program)";
+        Log.Write("Started: " + string.Join(", ", menu.Items.OfType<ToolStripMenuItem>()
+            .Where(i => i.CheckOnClick).Select(i => $"{i.Text} {OnOff(i.Checked)}")));
     }
 
     ToolStripMenuItem Toggle(string text, bool initial, Action<bool> apply)
@@ -89,6 +105,7 @@ sealed class TrayApp : ApplicationContext
         _switcher.Dispose();
         _sendNow.Dispose();
         _outline.Dispose();
+        _needsInputHotkey.Dispose();
         _icon.Visible = false;
         _icon.Dispose();
         Log.Write("Exited");

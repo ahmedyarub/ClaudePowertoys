@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using static ClaudePowertoys.KeyboardHook;
 
@@ -109,12 +108,7 @@ sealed class SessionSwitcher : IDisposable
         if (switchTo == null || isCurrent) return;
 
         Log.Write($"Switch to session '{switchTo.Title}' ({switchTo.SessionId})");
-        // Off the hook: ShellExecute can take long enough for Windows to drop a low-level hook.
-        ThreadPool.QueueUserWorkItem(_ =>
-        {
-            try { Process.Start(new ProcessStartInfo(switchTo.Link) { UseShellExecute = true })?.Dispose(); }
-            catch (Exception ex) { Log.Write($"Opening {switchTo.Link} failed: {ex.Message}"); }
-        });
+        ClaudeLinks.Open(switchTo.Link);
     }
 
     void ScanInBackground()

@@ -11,6 +11,19 @@ sealed record SessionInfo(string SessionId, string Title, string Folder, long La
     public string Link => $"claude://claude.ai/epitaxy/{SessionId}";
 }
 
+static class ClaudeLinks
+{
+    /// <summary>The app's own "Sessions Waiting for You" action.</summary>
+    public const string NeedsInput = "claude://code/needs-input?source=desktop_action";
+
+    /// <summary>Opens a claude:// link off the calling thread: ShellExecute can be slow, which a keyboard hook can't afford.</summary>
+    public static void Open(string link) => ThreadPool.QueueUserWorkItem(_ =>
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(link) { UseShellExecute = true })?.Dispose(); }
+        catch (Exception ex) { Log.Write($"Opening {link} failed: {ex.Message}"); }
+    });
+}
+
 /// <summary>
 /// Claude Desktop's recently active Code sessions, read from the app's own files in
 /// %APPDATA%\Claude\claude-code-sessions (one local_*.json per session).

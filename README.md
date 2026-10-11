@@ -38,6 +38,11 @@ Right-click the **PT** icon in the notification area to use it.
   prompts sent while Claude was working); pick one to scroll the conversation to it. Prompts that
   aren't loaded are reached by pressing the app's "Load earlier/later messages" buttons.
 
+- **Win+Alt+C: sessions waiting for you** (on by default): from any app, opens Claude Desktop's
+  own "Sessions Waiting for You" (`claude://code/needs-input`). Change the combination with
+  `NeedsInputHotkeyKeys` in `settings.json` (Win+Shift+C is taken on this machine); the tray menu
+  says so when another program owns the combination.
+
 ## Build and run
 
 ```
