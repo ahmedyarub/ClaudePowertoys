@@ -119,16 +119,20 @@ sealed class PromptHistoryRecall : IDisposable
         var entries = PromptHistory.Newest();
         if (_entries == null) return;
         _entries = entries;
-        _popup.ShowList(ClaudeWindow.Find(), PromptBoxTop(), entries.Select(OneLine).ToList(), _selected);
+        // Drawn oldest at the top, newest at the bottom next to the prompt box, so Up (older) moves up.
+        _popup.ShowList(ClaudeWindow.Find(), PromptBoxTop(), Enumerable.Reverse(entries).Select(OneLine).ToList(), Row(_selected));
     }
 
     void Move(int step)
     {
         if (_entries == null || _entries.Count == 0) return;
         _selected = Math.Clamp(_selected + step, 0, _entries.Count - 1);
-        int selected = _selected;
-        _popup.BeginInvoke(() => _popup.Select(selected));
+        int row = Row(_selected);
+        _popup.BeginInvoke(() => _popup.Select(row));
     }
+
+    /// <summary>Where entry <paramref name="index"/> (0 = newest) is drawn in the reversed list.</summary>
+    int Row(int index) => (_entries?.Count ?? 0) - 1 - index;
 
     void Close(bool insert)
     {

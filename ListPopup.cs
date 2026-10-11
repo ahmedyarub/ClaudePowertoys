@@ -90,7 +90,7 @@ sealed class ListPopup : Form
         int pad = S(PadLogical), row = S(RowLogical);
         var flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
 
-        var header = _rows.Count == 0 ? $"{_title}: none yet" : $"{_title}  ({_selected + 1} of {_rows.Count}; ↑ older, ↓ newer, Esc cancels)";
+        var header = _rows.Count == 0 ? $"{_title}: none yet" : $"{_title}  (↑ older, ↓ newer, Esc cancels)";
         TextRenderer.DrawText(g, header, dimFont, new Rectangle(pad, pad, Width - pad * 2, S(HeaderLogical) - pad / 2), DimText, flags);
 
         // A window of rows that keeps the selection in view.
