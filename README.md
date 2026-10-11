@@ -61,6 +61,10 @@ Right-click the **PT** icon in the notification area to use it.
   picker above the prompt box (1-9 pick); the tray's Snippets submenu lists them too and has
   Edit snippets…. A snippet is typed at the cursor, line breaks as Shift+Enter, so nothing is sent
   and the clipboard is left alone.
+- **Alt+Up: earlier prompts** (on by default): in Claude's prompt box, hold Alt and press Up to
+  list your earlier prompts (newest first, every Claude Code session of the last 30 days); Up /
+  Down move while Alt is held, Esc cancels, and releasing Alt types the chosen one at the cursor.
+  A draft in the box is never replaced.
 - **Win+Alt+C: sessions waiting for you** (on by default): from any app, opens Claude Desktop's
   own "Sessions Waiting for You" (`claude://code/needs-input`). Change the combination with
   `NeedsInputHotkeyKeys` in `settings.json` (Win+Shift+C is taken on this machine); the tray menu

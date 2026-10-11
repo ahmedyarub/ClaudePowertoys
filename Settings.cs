@@ -12,6 +12,7 @@ sealed class Settings
     public bool OutlineButton { get; set; } = true;
     public bool PromptJump { get; set; } = true;
     public bool Snippets { get; set; } = true;
+    public bool PromptHistory { get; set; } = true;
     public bool NeedsInputHotkey { get; set; } = true;
     /// <summary>The combination for "Sessions waiting for you". Win+Shift+C is taken on this machine.</summary>
     public string NeedsInputHotkeyKeys { get; set; } = "Win+Alt+C";

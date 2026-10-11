@@ -41,6 +41,26 @@ static partial class ConversationPrompts
         return prompts;
     }
 
+    /// <summary>The prompts with when they were sent (unix ms), in order.</summary>
+    public static List<(long At, string Text)> ReadTimed(string transcriptPath)
+    {
+        var prompts = new List<(long, string)>();
+        using var fs = new FileStream(transcriptPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(fs);
+        while (reader.ReadLine() is { } line)
+        {
+            if (!line.Contains("\"type\":\"user\"") && !line.Contains("\"queued_command\"")) continue;
+            var text = PromptOf(line);
+            if (text == null) continue;
+            var at = Timestamp().Match(line);
+            prompts.Add((at.Success && DateTimeOffset.TryParse(at.Groups[1].Value, out var t) ? t.ToUnixTimeMilliseconds() : 0, text));
+        }
+        return prompts;
+    }
+
+    [GeneratedRegex("\"timestamp\":\"([^\"]+)\"")]
+    private static partial Regex Timestamp();
+
     /// <summary>The prompt a transcript line records, or null when it records something else.</summary>
     public static string? PromptOf(string line)
     {

@@ -11,6 +11,7 @@ static class FocusTracker
 {
     static int _started;
     static volatile bool _inOtherTextField;
+    static volatile bool _inPromptBox;
 
     public static bool InOtherTextField
     {
@@ -18,6 +19,15 @@ static class FocusTracker
         {
             Start();
             return _inOtherTextField;
+        }
+    }
+
+    public static bool InPromptBox
+    {
+        get
+        {
+            Start();
+            return _inPromptBox;
         }
     }
 
@@ -37,8 +47,9 @@ static class FocusTracker
         try
         {
             var current = ((AutomationElement)sender).Current;
-            _inOtherTextField = (current.ControlType == ControlType.Edit || current.ControlType == ControlType.Document)
-                && current.Name != "Prompt";
+            bool textField = current.ControlType == ControlType.Edit || current.ControlType == ControlType.Document;
+            _inPromptBox = textField && current.Name == "Prompt";
+            _inOtherTextField = textField && !_inPromptBox;
         }
         catch (ElementNotAvailableException) { }
     }

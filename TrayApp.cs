@@ -14,6 +14,7 @@ sealed class TrayApp : ApplicationContext
     readonly OutlineButton _outline = new();
     readonly PromptJumpShortcut _promptJump = new();
     readonly SnippetInserter _snippets = new();
+    readonly PromptHistoryRecall _history = new();
     readonly SidebarAutoHide _autoHide;
     readonly GlobalHotkey _needsInputHotkey;
     readonly GlobalHotkey _newSessionHotkey;
@@ -73,6 +74,11 @@ sealed class TrayApp : ApplicationContext
             _settings.Snippets = on;
             _snippets.Enabled = on;
         }));
+        menu.Items.Add(Toggle("Alt+Up: earlier prompts", _settings.PromptHistory, on =>
+        {
+            _settings.PromptHistory = on;
+            _history.Enabled = on;
+        }));
         var snippetsMenu = new ToolStripMenuItem("Snippets");
         // Re-read on every opening, so edits to snippets.json show up without a restart.
         snippetsMenu.DropDownOpening += (_, _) =>
@@ -123,6 +129,7 @@ sealed class TrayApp : ApplicationContext
         _outline.Start();
         _promptJump.Enabled = _settings.PromptJump;
         _snippets.Enabled = _settings.Snippets;
+        _history.Enabled = _settings.PromptHistory;
         _status.RecentWindow = TimeSpan.FromHours(_settings.RecentSessionHours);
         _status.Start();
         Log.Write("Started: " + string.Join(", ", menu.Items.OfType<ToolStripMenuItem>()
@@ -171,6 +178,7 @@ sealed class TrayApp : ApplicationContext
         _outline.Dispose();
         _promptJump.Dispose();
         _snippets.Dispose();
+        _history.Dispose();
         _needsInputHotkey.Dispose();
         _newSessionHotkey.Dispose();
         _menuOwner.Dispose();

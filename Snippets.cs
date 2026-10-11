@@ -116,7 +116,7 @@ sealed class SnippetInserter : IDisposable
         }
         box.SetFocus();
         Log.Write($"Snippet '{snippet.Name}' inserted");
-        Type(snippet.Text);
+        TextTyper.Type(snippet.Text);
     }
 
     static AutomationElement? PromptBox()
@@ -128,41 +128,5 @@ sealed class SnippetInserter : IDisposable
             new PropertyCondition(AutomationElement.NameProperty, "Prompt")));
     }
 
-    /// <summary>Types the text as Unicode key events; each line break becomes Shift+Enter.</summary>
-    static void Type(string text)
-    {
-        var inputs = new List<INPUT>();
-        foreach (var line in text.Replace("\r\n", "\n").Split('\n').Select((l, i) => (l, i)))
-        {
-            if (line.i > 0)
-            {
-                inputs.Add(Key(VK_SHIFT, up: false));
-                inputs.Add(Key(VK_RETURN, up: false));
-                inputs.Add(Key(VK_RETURN, up: true));
-                inputs.Add(Key(VK_SHIFT, up: true));
-            }
-            foreach (var ch in line.l)
-            {
-                inputs.Add(Unicode(ch, up: false));
-                inputs.Add(Unicode(ch, up: true));
-            }
-        }
-        if (SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<INPUT>()) != inputs.Count)
-            Log.Write($"Snippet typing was cut short ({Marshal.GetLastWin32Error()})");
-    }
-
-    const uint INPUT_KEYBOARD = 1, KEYEVENTF_KEYUP = 0x2, KEYEVENTF_UNICODE = 0x4;
-
-    static INPUT Key(int vk, bool up) => new() { type = INPUT_KEYBOARD, ki = new KEYBDINPUT { wVk = (ushort)vk, dwFlags = up ? KEYEVENTF_KEYUP : 0 } };
-    static INPUT Unicode(char ch, bool up) => new() { type = INPUT_KEYBOARD, ki = new KEYBDINPUT { wScan = ch, dwFlags = KEYEVENTF_UNICODE | (up ? KEYEVENTF_KEYUP : 0) } };
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct KEYBDINPUT { public ushort wVk, wScan; public uint dwFlags, time; public IntPtr dwExtraInfo; }
-
-    // The union's largest member (MOUSEINPUT) sets INPUT's size; padding stands in for it.
-    [StructLayout(LayoutKind.Sequential)]
-    struct INPUT { public uint type; public KEYBDINPUT ki; public long padding; }
-
-    [DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint count, INPUT[] inputs, int size);
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
 }
