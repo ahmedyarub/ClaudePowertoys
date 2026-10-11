@@ -48,6 +48,11 @@ Right-click the **PT** icon in the notification area to use it.
   the conversation to your previous / next prompt, loading earlier messages when needed. Left
   alone in other text fields (terminal, Files editor); in the prompt box they jump instead of
   moving the cursor by paragraph.
+- **Snippets** (on by default): reusable prompts in `%APPDATA%\ClaudePowertoys\snippets.json`
+  (`[{ "name": ..., "text": ... }]`, created with two examples). Ctrl+Shift+Space in Claude opens a
+  picker above the prompt box (1-9 pick); the tray's Snippets submenu lists them too and has
+  Edit snippets…. A snippet is typed at the cursor, line breaks as Shift+Enter, so nothing is sent
+  and the clipboard is left alone.
 - **Win+Alt+C: sessions waiting for you** (on by default): from any app, opens Claude Desktop's
   own "Sessions Waiting for You" (`claude://code/needs-input`). Change the combination with
   `NeedsInputHotkeyKeys` in `settings.json` (Win+Shift+C is taken on this machine); the tray menu
