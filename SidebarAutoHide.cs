@@ -15,9 +15,12 @@ namespace ClaudePowertoys;
 /// </summary>
 sealed class SidebarAutoHide : IDisposable
 {
-    const int PollMs = 100;
-    const int EdgePx = 6;
-    const int RevealDelayMs = 150;
+    const int PollMs = 25;
+    const int EdgePx = 12;
+    // The docked state is read over UI Automation; away from the edge it only matters for the slow hide path.
+    const int DockedCheckMs = 250;
+    // The app takes a moment to report the peek as open; don't re-post hovers inside that window.
+    const int PeekSettleMs = 300;
     const int HideDelayMs = 600;
 
     static readonly Condition ButtonCondition = new OrCondition(
@@ -34,10 +37,12 @@ sealed class SidebarAutoHide : IDisposable
     IntPtr _hwnd;
     AutomationElement? _button;
     AutomationElement? _sidebar;
-    long? _edgeSince;
     long? _outsideSince;
-    // One peek per visit to the edge, so closing the peek (e.g. Esc) with the cursor parked there does not reopen it.
-    bool _edgeArmed = true;
+    bool _docked;
+    long _dockedCheckedAt;
+    long _lastPeekAt;
+    // Where the cursor was at the last peek: a cursor parked there doesn't reopen a peek closed with Esc.
+    Native.POINT? _lastPeekPt;
 
     public volatile bool Enabled;
 
@@ -54,7 +59,7 @@ sealed class SidebarAutoHide : IDisposable
             Thread.Sleep(PollMs);
             if (!Enabled)
             {
-                _edgeSince = _outsideSince = null;
+                _outsideSince = null;
                 continue;
             }
             try
@@ -87,38 +92,40 @@ sealed class SidebarAutoHide : IDisposable
         _button ??= AutomationElement.FromHandle(_hwnd).FindFirst(TreeScope.Descendants, ButtonCondition);
         if (_button == null) return;
 
-        bool docked = _button.Current.Name.StartsWith("Hide", StringComparison.OrdinalIgnoreCase);
         Native.GetCursorPos(out var pt);
         bool overClaude = Native.GetAncestor(Native.WindowFromPoint(pt), Native.GA_ROOT) == _hwnd;
+        bool atEdge = overClaude && pt.X <= Native.VisibleBounds(_hwnd).Left + EdgePx;
         long now = Environment.TickCount64;
 
-        if (!docked)
+        if (atEdge || now - _dockedCheckedAt >= DockedCheckMs)
+        {
+            _docked = _button.Current.Name.StartsWith("Hide", StringComparison.OrdinalIgnoreCase);
+            _dockedCheckedAt = now;
+        }
+
+        if (!_docked)
         {
             _sidebar = null;
             _outsideSince = null;
-            bool atEdge = overClaude && pt.X <= Native.VisibleBounds(_hwnd).Left + EdgePx;
             if (!atEdge)
             {
-                _edgeSince = null;
-                _edgeArmed = true;
+                _lastPeekPt = null;
                 return;
             }
-            if (!_edgeArmed) return;
-            _edgeSince ??= now;
-            if (now - _edgeSince < RevealDelayMs) return;
-            _edgeSince = null;
-            _edgeArmed = false;
+            if (now - _lastPeekAt < PeekSettleMs) return;
+            if (_lastPeekPt is { } last && last.X == pt.X && last.Y == pt.Y) return;
             if (IsExpanded(_button)) return;
 
             var b = _button.Current.BoundingRectangle;
             Log.Write($"Peek sidebar (cursor {pt.X},{pt.Y}, button {b})");
             Native.PostMouseMove(_hwnd, (int)(b.Left + b.Width / 2), (int)(b.Top + b.Height / 2));
             Native.PostMouseMove(_hwnd, pt.X, pt.Y);
+            _lastPeekAt = now;
+            _lastPeekPt = pt;
             return;
         }
 
         // Docked open (the person pressed Show sidebar): collapse it once the mouse has left it.
-        _edgeSince = null;
         _sidebar ??= AutomationElement.FromHandle(_hwnd).FindFirst(TreeScope.Descendants, SidebarCondition);
         if (_sidebar == null) return;
 
@@ -136,6 +143,7 @@ sealed class SidebarAutoHide : IDisposable
         if (_button.TryGetCurrentPattern(InvokePattern.Pattern, out var invoke)) ((InvokePattern)invoke).Invoke();
         else Log.Write("'Hide sidebar' button exposes no Invoke pattern");
         _outsideSince = null;
+        _dockedCheckedAt = 0;
     }
 
     /// <summary>While collapsed, the button's aria-expanded reports whether the floating sidebar is open.</summary>

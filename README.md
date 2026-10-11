@@ -7,7 +7,7 @@ Right-click the **PT** icon in the notification area to use it.
 
 ## Features
 
-- **Auto-hide sidebar**: rest the mouse on the window's left edge for 150 ms and the sidebar slides
+- **Auto-hide sidebar**: touch the window's left edge (within 12 px) and the sidebar slides
   out *over* the main panel, which keeps its full width. It closes by itself once the mouse leaves
   it. This is the app's own floating sidebar (the one that appears when you hover the collapsed
   Show sidebar button); Powertoys just triggers it from the edge, without moving your cursor.
