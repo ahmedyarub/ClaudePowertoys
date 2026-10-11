@@ -45,6 +45,8 @@ Right-click the **PT** icon in the notification area to use it.
   working / idle) and context size, and the tray icon shows a red badge with the number of
   sessions waiting for you (Claude asked a question or wants a plan approved, or finished a turn
   you haven't seen), naming them in its tooltip. Left-click the icon to open the first one.
+  Working sessions show how long the current turn has run ("working 12 min"), in the list and in
+  the tooltip.
   States come from each session's transcript, read as it grows. Permission prompts aren't in the
   transcript, so a session waiting on one shows as working.
 - **Ctrl+Up/Down jumps between prompts** (on by default): in Claude, Ctrl+Up / Ctrl+Down scroll

@@ -14,7 +14,17 @@ enum SessionState
     NewReply,
 }
 
-sealed record SessionStatusInfo(SessionState State, long ContextTokens);
+/// <param name="TurnStartedAt">Unix ms of the prompt that started the current turn; meaningful while working or needing you.</param>
+sealed record SessionStatusInfo(SessionState State, long ContextTokens, long TurnStartedAt)
+{
+    /// <summary>"12 min", "2 h 5 min": how long the current turn has been going.</summary>
+    public string TurnAge()
+    {
+        if (TurnStartedAt == 0) return "";
+        var age = DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeMilliseconds(TurnStartedAt);
+        return age.TotalMinutes < 1 ? "<1 min" : age.TotalHours < 1 ? $"{(int)age.TotalMinutes} min" : $"{(int)age.TotalHours} h {age.Minutes} min";
+    }
+}
 
 /// <summary>
 /// A session's state, read from its Claude Code transcript as it grows (each file is only read from
@@ -32,6 +42,7 @@ static class SessionStatus
         public long Offset;
         public string Last = "";          // "end", "tools", "working", "interrupted"
         public long EndedAt;              // unix ms of the last end_turn
+        public long StartedAt;            // unix ms of the prompt that started the current turn
         public readonly Dictionary<string, string> Pending = [];
         public long ContextTokens;
     }
@@ -59,7 +70,7 @@ static class SessionStatus
                 "working" => SessionState.Working,
                 _ => SessionState.Idle,
             };
-            return new SessionStatusInfo(state, tail.ContextTokens);
+            return new SessionStatusInfo(state, tail.ContextTokens, tail.StartedAt);
         }
     }
 
@@ -132,7 +143,10 @@ static class SessionStatus
             }
         }
         var text = content.ValueKind == JsonValueKind.String ? content.GetString() ?? "" : content.ToString();
-        tail.Last = text.Contains("[Request interrupted by user") ? "interrupted" : "working";
+        bool interrupted = text.Contains("[Request interrupted by user");
+        // A prompt after a finished turn starts a new one; a prompt mid-turn joins the running one.
+        if (!interrupted && tail.Last is "" or "end" or "interrupted") tail.StartedAt = Timestamp(root);
+        tail.Last = interrupted ? "interrupted" : "working";
         tail.Pending.Clear();
     }
 

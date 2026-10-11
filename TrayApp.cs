@@ -26,7 +26,7 @@ sealed class TrayApp : ApplicationContext
     {
         // The forms created above installed WinForms' synchronization context on this thread.
         _ui = SynchronizationContext.Current!;
-        _status = new StatusMonitor(waiting => _ui.Post(_ => ShowWaiting(waiting), null));
+        _status = new StatusMonitor(snapshot => _ui.Post(_ => ShowStatus(snapshot), null));
         _switcher.StatusOf = _status.Get;
         _autoHide = new SidebarAutoHide(_handleBlocker.OverlayHandle);
         _needsInputHotkey = new GlobalHotkey(_settings.NeedsInputHotkeyKeys, () =>
@@ -181,17 +181,24 @@ sealed class TrayApp : ApplicationContext
         base.ExitThreadCore();
     }
 
-    void ShowWaiting(List<(SessionInfo Session, SessionStatusInfo Status)> waiting)
+    void ShowStatus(StatusSnapshot snapshot)
     {
+        var waiting = snapshot.Waiting;
+        if (waiting.Count != _waiting.Count)
+        {
+            var old = _icon.Icon;
+            _icon.Icon = DrawIcon(waiting.Count);
+            if (old != null) DestroyIcon(old.Handle);
+        }
         _waiting = waiting;
-        var old = _icon.Icon;
-        _icon.Icon = DrawIcon(waiting.Count);
-        if (old != null) DestroyIcon(old.Handle);
 
-        var text = waiting.Count == 0 ? "Claude Powertoys"
-            : $"{waiting.Count} waiting: " + string.Join(", ", waiting.Select(w => w.Session.Title));
+        var lines = new List<string>();
+        if (waiting.Count > 0) lines.Add($"{waiting.Count} waiting: " + string.Join(", ", waiting.Select(w => w.Session.Title)));
+        if (snapshot.Working.Count > 0) lines.Add("Working: " + string.Join(", ", snapshot.Working.Select(w => $"{w.Session.Title} ({w.Status.TurnAge()})")));
+        var text = lines.Count == 0 ? "Claude Powertoys" : string.Join("\n", lines);
         // The notification-area tooltip holds at most 127 characters.
-        _icon.Text = text.Length <= 127 ? text : text[..126] + "…";
+        text = text.Length <= 127 ? text : text[..126] + "…";
+        if (_icon.Text != text) _icon.Text = text;
     }
 
     [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr icon);

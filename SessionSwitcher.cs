@@ -277,6 +277,7 @@ sealed class SwitcherForm : Form
             using (var dotBrush = new SolidBrush(dotColor))
                 g.FillEllipse(dotBrush, rect.X + pad, y + (row - dot) / 2, dot, dot);
 
+            if (status?.State is SessionState.Working or SessionState.NeedsYou && status.TurnAge() is { Length: > 0 } age) word += " " + age;
             var details = string.Join(" · ", new[] { word, status == null ? "" : Tokens(status.ContextTokens) + " ctx", s.Folder }.Where(p => p != ""));
             int detailsWidth = details == "" ? 0 : Math.Min(S(300), TextRenderer.MeasureText(details, dimFont).Width + pad);
             int titleX = rect.X + pad + dot + pad;

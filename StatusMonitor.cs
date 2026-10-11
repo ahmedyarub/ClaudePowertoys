@@ -1,16 +1,22 @@
 namespace ClaudePowertoys;
 
+/// <param name="Waiting">Sessions waiting for the person: Claude asked something, or finished a turn they haven't seen.</param>
+/// <param name="Working">Sessions in the middle of a turn.</param>
+sealed record StatusSnapshot(
+    List<(SessionInfo Session, SessionStatusInfo Status)> Waiting,
+    List<(SessionInfo Session, SessionStatusInfo Status)> Working);
+
 /// <summary>
 /// Every few seconds, works out the state of each recent session and reports the ones waiting for
-/// the person (Claude asked something, or finished a turn they haven't seen). The session on screen
-/// doesn't count while Claude is in front: they are looking at it.
+/// the person and the ones working. The session on screen doesn't count as waiting while Claude is
+/// in front: they are looking at it.
 /// </summary>
 sealed class StatusMonitor : IDisposable
 {
     const int PollMs = 3000;
 
     readonly Thread _thread;
-    readonly Action<List<(SessionInfo Session, SessionStatusInfo Status)>> _onWaitingChanged;
+    readonly Action<StatusSnapshot> _onUpdate;
     volatile bool _stop;
     volatile Dictionary<string, SessionStatusInfo> _statuses = [];
     string _lastWaitingKey = "";
@@ -23,10 +29,10 @@ sealed class StatusMonitor : IDisposable
 
     public TimeSpan RecentWindow = TimeSpan.FromHours(8);
 
-    /// <param name="onWaitingChanged">Called on the monitor's thread with the waiting sessions, whenever that set changes.</param>
-    public StatusMonitor(Action<List<(SessionInfo, SessionStatusInfo)>> onWaitingChanged)
+    /// <param name="onUpdate">Called on the monitor's thread after every poll.</param>
+    public StatusMonitor(Action<StatusSnapshot> onUpdate)
     {
-        _onWaitingChanged = onWaitingChanged;
+        _onUpdate = onUpdate;
         _thread = new Thread(Loop) { IsBackground = true, Name = "StatusMonitor" };
     }
 
@@ -52,6 +58,7 @@ sealed class StatusMonitor : IDisposable
         var sessions = RecentSessions.Scan(RecentWindow);
         var statuses = new Dictionary<string, SessionStatusInfo>();
         var waiting = new List<(SessionInfo, SessionStatusInfo)>();
+        var working = new List<(SessionInfo, SessionStatusInfo)>();
         bool claudeInFront = ClaudeWindow.IsInFrontSlow();
         long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         if (claudeInFront && sessions.Count > 0) _seenAt[sessions[0].SessionId] = now;
@@ -66,13 +73,16 @@ sealed class StatusMonitor : IDisposable
             statuses[s.SessionId] = status;
             bool onScreen = i == 0 && claudeInFront;
             if (!onScreen && status.State is SessionState.NeedsYou or SessionState.NewReply) waiting.Add((s, status));
+            if (status.State == SessionState.Working) working.Add((s, status));
         }
         _statuses = statuses;
 
         var key = string.Join("|", waiting.Select(w => $"{w.Item1.SessionId}:{w.Item2.State}"));
-        if (key == _lastWaitingKey) return;
-        _lastWaitingKey = key;
-        Log.Write($"Waiting sessions: {(waiting.Count == 0 ? "none" : string.Join(", ", waiting.Select(w => $"'{w.Item1.Title}' ({w.Item2.State})")))}");
-        _onWaitingChanged(waiting);
+        if (key != _lastWaitingKey)
+        {
+            _lastWaitingKey = key;
+            Log.Write($"Waiting sessions: {(waiting.Count == 0 ? "none" : string.Join(", ", waiting.Select(w => $"'{w.Item1.Title}' ({w.Item2.State})")))}");
+        }
+        _onUpdate(new StatusSnapshot(waiting, working));
     }
 }
