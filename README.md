@@ -11,8 +11,8 @@ Right-click the **PT** icon in the notification area to use it.
   out *over* the main panel, which keeps its full width. It closes by itself once the mouse leaves
   it. This is the app's own floating sidebar (the one that appears when you hover the collapsed
   Show sidebar button); Powertoys just triggers it from the edge, without moving your cursor.
-  If you dock the sidebar with the Show sidebar button, it is collapsed again 600 ms after the
-  mouse leaves it (never while a mouse button is held, so dragging a session out still works).
+  Clicking the app's Show sidebar button docks (pins) the sidebar as usual, and auto-hide leaves
+  it alone until you hide it again.
 
 ## Build and run
 
