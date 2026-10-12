@@ -1,133 +1,91 @@
 namespace ClaudePowertoys;
 
 /// <summary>
-/// A browser-style bookmark manager: folders on the left (All bookmarks, Unsorted, then your folders),
-/// the bookmarks of the selected folder on the right, and a search box across everything. Double-click
-/// or Enter opens, F2 renames, Delete removes, dragging onto a folder moves; right-click for the rest.
-/// Refreshes itself when bookmarks change elsewhere (Ctrl+D).
+/// The bookmark manager, in Claude Desktop's style: a sidebar with a search field, All bookmarks,
+/// Unsorted and your folders (a + on the Folders header adds one), a hairline you can drag, and the
+/// bookmarks of the selected folder as two-line rows with a sort chip. Double-click or Enter opens,
+/// F2 renames, Delete removes, dragging onto a folder moves; right-click for the rest. Searching
+/// looks through every folder. Refreshes itself when bookmarks change elsewhere (Ctrl+D).
 /// </summary>
 sealed class BookmarkManager : Form
 {
-    static readonly Color Background = Color.FromArgb(38, 38, 36);
-    static readonly Color Panel = Color.FromArgb(46, 46, 43);
-    static readonly Color Field = Color.FromArgb(56, 56, 52);
-    static readonly Color Line = Color.FromArgb(70, 70, 66);
-    static readonly Color RowText = Color.FromArgb(240, 238, 230);
-    static readonly Color DimText = Color.FromArgb(160, 158, 150);
+    const string AllKey = "\0all", UnsortedKey = "\0unsorted", FoldersHeader = "\0folders", FolderPrefix = "f:";
 
-    const string AllNode = "\0all", UnsortedNode = "";
+    enum Sort { Newest, Oldest, Name, Session }
 
-    readonly TextBox _search = new();
-    readonly TreeView _folders = new();
-    readonly ListView _list = new();
-    readonly Label _status = new();
-    int _sortColumn = 3;
-    bool _sortAscending;
+    readonly float _scale;
+    readonly Panel _side = new() { Dock = DockStyle.Left, BackColor = Theme.Sidebar };
+    readonly SearchField _search;
+    readonly NavList _nav = new() { Dock = DockStyle.Fill };
+    readonly PaneSplitter _splitter = new() { Dock = DockStyle.Left };
+    readonly Header _header = new() { Dock = DockStyle.Top };
+    readonly BookmarkList _list = new() { Dock = DockStyle.Fill };
+    Sort _sort = Sort.Newest;
+
+    int S(float logical) => (int)Math.Round(logical * _scale);
 
     public BookmarkManager()
     {
-        Text = "Bookmarks: Claude Powertoys";
-        StartPosition = FormStartPosition.CenterScreen;
-        // Sizes are given in logical pixels and scaled here: WinForms doesn't scale controls built in
-        // code, and fonts in points already follow the DPI.
-        float scale = DeviceDpi / 96f;
-        int S(int logical) => (int)Math.Round(logical * scale);
+        // Sizes are in logical pixels, scaled here: WinForms doesn't scale controls built in code.
+        _scale = DeviceDpi / 96f;
         AutoScaleMode = AutoScaleMode.None;
-        Font = new Font("Segoe UI", 10f);
-        BackColor = Background;
-        ForeColor = RowText;
-        ClientSize = new Size(S(1100), S(680));
-        MinimumSize = new Size(S(700), S(420));
+        Text = "Bookmarks";
+        Icon = AppIcon.Draw(S(32));
+        StartPosition = FormStartPosition.CenterScreen;
+        BackColor = Theme.Main;
+        ForeColor = Theme.Text;
+        ClientSize = new Size(S(1080), S(700));
+        MinimumSize = new Size(S(720), S(440));
         KeyPreview = true;
 
-        _search.Dock = DockStyle.Fill;
-        _search.BorderStyle = BorderStyle.FixedSingle;
-        _search.BackColor = Field;
-        _search.ForeColor = RowText;
-        _search.PlaceholderText = "Search bookmarks";
-        _search.TextChanged += (_, _) => Fill();
+        _search = new SearchField("Search bookmarks") { Dock = DockStyle.Fill, UiScale = _scale };
+        _search.Box.TextChanged += (_, _) => FillList();
+        var searchHost = new Panel { Dock = DockStyle.Top, Height = S(66), Padding = new Padding(S(12), S(16), S(12), S(10)), BackColor = Theme.Sidebar };
+        searchHost.Controls.Add(_search);
+        _nav.UiScale = _scale;
+        _side.Width = S(280);
+        _side.Padding = new Padding(0, 0, 0, S(12));
+        _side.Controls.Add(_nav);
+        _side.Controls.Add(searchHost);
 
-        var top = new Panel { Dock = DockStyle.Top, Height = S(56), Padding = new Padding(S(12), S(12), S(12), S(10)), BackColor = Background };
-        top.Controls.Add(_search);
+        _splitter.UiScale = _scale;
+        _splitter.Width = S(7);
+        _splitter.Attach(_side);
 
-        _folders.Dock = DockStyle.Fill;
-        _folders.BorderStyle = BorderStyle.None;
-        _folders.BackColor = Panel;
-        _folders.ForeColor = RowText;
-        _folders.LineColor = Line;
-        _folders.HideSelection = false;
-        _folders.FullRowSelect = true;
-        _folders.ShowLines = false;
-        _folders.ShowRootLines = false;
-        _folders.ItemHeight = S(38);
-        _folders.Indent = S(12);
-        _folders.LabelEdit = true;
-        _folders.AllowDrop = true;
-        _folders.AfterSelect += (_, _) => Fill();
-        _folders.BeforeLabelEdit += (_, e) => e.CancelEdit = !IsUserFolder(e.Node);
-        _folders.AfterLabelEdit += RenameFolder;
-        _folders.DragOver += FolderDragOver;
-        _folders.DragDrop += FolderDragDrop;
-        _folders.NodeMouseClick += (_, e) => { if (e.Button == MouseButtons.Right) _folders.SelectedNode = e.Node; };
-        _folders.ContextMenuStrip = FolderMenu();
+        _header.UiScale = _scale;
+        _header.Height = S(78);
+        _header.SortChip.UiScale = _scale;
+        _header.SortChip.Click += (_, _) => ShowSortMenu();
 
-        _list.Dock = DockStyle.Fill;
-        _list.View = View.Details;
-        _list.FullRowSelect = true;
-        _list.HideSelection = false;
-        _list.BorderStyle = BorderStyle.None;
-        _list.BackColor = Background;
-        _list.ForeColor = RowText;
-        _list.LabelEdit = true;
-        _list.OwnerDraw = true;
-        _list.Columns.Add("Name", S(460));
-        _list.Columns.Add("Session", S(280));
-        _list.Columns.Add("By", S(80));
-        _list.Columns.Add("Added", S(140));
-        // A Details list's row height follows its image list; a blank one makes the rows taller.
-        _list.SmallImageList = new ImageList { ImageSize = new Size(1, S(36)) };
-        _list.DrawColumnHeader += DrawHeader;
-        _list.DrawItem += (_, e) => e.DrawDefault = true;
-        _list.DrawSubItem += (_, e) => e.DrawDefault = true;
-        _list.ColumnClick += (_, e) => { _sortAscending = e.Column == _sortColumn ? !_sortAscending : e.Column != 3; _sortColumn = e.Column; Fill(); };
-        _list.ItemActivate += (_, _) => OpenSelected();
-        _list.AfterLabelEdit += RenameBookmark;
-        _list.ItemDrag += (_, _) => DoDragDrop(SelectedIds().ToArray(), DragDropEffects.Move);
-        _list.ContextMenuStrip = BookmarkMenuStrip();
+        _list.UiScale = _scale;
+        _list.EmptyTitle = "No bookmarks here";
+        _list.EmptyHint = "Point at any message in Claude and press Ctrl+D";
 
-        // A wide splitter to grab, drawn as a thin line in its middle.
-        // Minimum pane sizes are set once the window has its size (Load): set now, against the
-        // container's default width, WinForms rejects them.
-        var split = new SplitContainer { Dock = DockStyle.Fill, BackColor = Background, SplitterWidth = S(7) };
-        split.Paint += (_, e) =>
-        {
-            var r = split.SplitterRectangle;
-            using var line = new Pen(Line, Math.Max(1, S(1)));
-            e.Graphics.DrawLine(line, r.Left + r.Width / 2, r.Top, r.Left + r.Width / 2, r.Bottom);
-        };
-        split.Panel1.Controls.Add(_folders);
-        split.Panel1.BackColor = Panel;
-        split.Panel2.Controls.Add(_list);
+        var main = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Main };
+        main.Controls.Add(_list);
+        main.Controls.Add(_header);
+        Controls.Add(main);
+        Controls.Add(_splitter);
+        Controls.Add(_side);
 
-        _status.Dock = DockStyle.Bottom;
-        _status.Height = S(34);
-        _status.Padding = new Padding(S(12), S(6), S(12), S(6));
-        _status.ForeColor = DimText;
-        _status.BackColor = Background;
-
-        Controls.Add(split);
-        Controls.Add(top);
-        Controls.Add(_status);
+        _nav.SelectedChanged += _ => FillList();
+        _nav.AddClicked += NewFolder;
+        _nav.Renamed += RenameFolder;
+        _nav.Dropped += (key, ids) => BookmarkStore.Move(ids, FolderOf(key));
+        _nav.ContextRequested += ShowFolderMenu;
+        _list.Open += BookmarkMenu.Open;
+        _list.DeleteRequested += ids => BookmarkStore.Remove(ids);
+        _list.Renamed += BookmarkStore.Rename;
+        _list.ContextRequested += ShowBookmarkMenu;
 
         BookmarkStore.Changed += OnStoreChanged;
-        Load += (_, _) =>
-        {
-            split.SplitterDistance = S(270);
-            split.Panel1MinSize = S(160);
-            split.Panel2MinSize = S(300);
-            FillFolders(AllNode);
-            _search.Focus();
-        };
+        Load += (_, _) => { Refill(AllKey); _search.Box.Focus(); };
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        Theme.DarkWindow(Handle, Theme.Main);
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
@@ -143,182 +101,189 @@ sealed class BookmarkManager : Form
         if (!Visible) Show();
         if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
         Activate();
-        FillFolders(SelectedFolder());
+        Refill(_nav.Selected ?? AllKey);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
-        if (e.KeyCode == Keys.Escape && _search.Text != "") { _search.Clear(); e.Handled = true; }
-        else if (e.KeyCode == Keys.Delete && _list.Focused) { DeleteSelected(); e.Handled = true; }
-        else if (e.KeyCode == Keys.F2 && _list.Focused && _list.SelectedItems.Count == 1) { _list.SelectedItems[0].BeginEdit(); e.Handled = true; }
-        else if (e.KeyCode == Keys.F2 && _folders.Focused && IsUserFolder(_folders.SelectedNode)) { _folders.SelectedNode!.BeginEdit(); e.Handled = true; }
-        else if (e.KeyCode == Keys.Enter && _list.Focused) { OpenSelected(); e.Handled = true; }
-        else if (e.Control && e.KeyCode == Keys.F) { _search.Focus(); _search.SelectAll(); e.Handled = true; }
+        if (e.Control && e.KeyCode == Keys.F) { _search.Box.Focus(); _search.Box.SelectAll(); e.Handled = true; }
+        else if (e.KeyCode == Keys.Escape && _search.Box.Text != "") { _search.Box.Clear(); e.Handled = true; }
+        else if (e.KeyCode == Keys.F2 && _nav.Focused && _nav.Selected is { } key && _nav.CanRename(key)) { _nav.BeginRename(key); e.Handled = true; }
         base.OnKeyDown(e);
     }
 
     void OnStoreChanged()
     {
         if (!IsHandleCreated || IsDisposed) return;
-        BeginInvoke(() => { if (Visible) FillFolders(SelectedFolder()); });
+        BeginInvoke(() => { if (Visible) Refill(_nav.Selected ?? AllKey); });
     }
 
-    // ---- folders ----
+    static string FolderOf(string key) => key.StartsWith(FolderPrefix) ? key[FolderPrefix.Length..] : "";
 
-    string SelectedFolder() => _folders.SelectedNode?.Tag as string ?? AllNode;
-
-    static bool IsUserFolder(TreeNode? node) => node?.Tag is string tag && tag != AllNode && tag != UnsortedNode;
-
-    void FillFolders(string select)
+    void Refill(string select)
     {
-        var bookmarks = BookmarkStore.Load();
-        _folders.BeginUpdate();
-        _folders.Nodes.Clear();
-        _folders.Nodes.Add(new TreeNode($"★  All bookmarks ({bookmarks.Count})") { Tag = AllNode });
-        _folders.Nodes.Add(new TreeNode($"📥  Unsorted ({bookmarks.Count(b => b.Folder == "")})") { Tag = UnsortedNode });
-        foreach (var f in BookmarkStore.Folders())
-            _folders.Nodes.Add(new TreeNode($"📁  {f} ({bookmarks.Count(b => b.Folder == f)})") { Tag = f, Name = f });
-        _folders.SelectedNode = _folders.Nodes.Cast<TreeNode>().FirstOrDefault(n => n.Tag as string == select) ?? _folders.Nodes[0];
-        _folders.EndUpdate();
-        Fill();
-    }
-
-    ContextMenuStrip FolderMenu()
-    {
-        var menu = new ContextMenuStrip { Renderer = DarkMenu.Renderer, ShowImageMargin = false };
-        var rename = new ToolStripMenuItem("Rename\tF2", null, (_, _) => _folders.SelectedNode?.BeginEdit());
-        var delete = new ToolStripMenuItem("Delete folder (bookmarks move to Unsorted)", null, (_, _) =>
+        var all = BookmarkStore.Load();
+        string Count(int n) => n == 0 ? "" : n.ToString();
+        var items = new List<NavList.Item>
         {
-            if (IsUserFolder(_folders.SelectedNode) && _folders.SelectedNode!.Tag is string folder) BookmarkStore.DeleteFolder(folder);
-        });
-        menu.Items.Add("New folder", null, (_, _) => NewFolder());
-        menu.Items.Add(rename);
-        menu.Items.Add(delete);
-        menu.Opening += (_, _) => rename.Enabled = delete.Enabled = IsUserFolder(_folders.SelectedNode);
-        return menu;
+            new(AllKey, "All bookmarks", Theme.GlyphStar, Count(all.Count)),
+            new(UnsortedKey, "Unsorted", Theme.GlyphDocument, Count(all.Count(b => b.Folder == "")), CanDrop: true),
+            new(FoldersHeader, "Folders", Header: true),
+        };
+        foreach (var f in BookmarkStore.Folders())
+            items.Add(new(FolderPrefix + f, f, Theme.GlyphFolder, Count(all.Count(b => b.Folder == f)), CanRename: true, CanDrop: true));
+        _nav.SetItems(items, select);
+        FillList();
+    }
+
+    void FillList()
+    {
+        var all = BookmarkStore.Load();
+        var query = _search.Box.Text.Trim();
+        var key = _nav.Selected ?? AllKey;
+        IEnumerable<Bookmark> shown;
+        if (query != "")
+        {
+            shown = all.Where(b => new[] { b.Name, b.Text, b.SessionTitle, b.Folder }.Any(s => s.Contains(query, StringComparison.OrdinalIgnoreCase)));
+            _header.SetTitle("Search results");
+        }
+        else
+        {
+            shown = key == AllKey ? all : all.Where(b => b.Folder == FolderOf(key));
+            _header.SetTitle(key == AllKey ? "All bookmarks" : key == UnsortedKey ? "Unsorted" : FolderOf(key));
+        }
+        var rows = (_sort switch
+        {
+            Sort.Oldest => shown.OrderBy(b => b.AddedAt),
+            Sort.Name => shown.OrderBy(b => b.Name, StringComparer.CurrentCultureIgnoreCase),
+            Sort.Session => shown.OrderBy(b => b.SessionTitle, StringComparer.CurrentCultureIgnoreCase).ThenByDescending(b => b.AddedAt),
+            _ => shown.OrderByDescending(b => b.AddedAt),
+        }).ToList();
+        _header.SetSubtitle(query != "" ? $"{rows.Count} found in all folders" : $"{rows.Count} bookmark{(rows.Count == 1 ? "" : "s")}");
+        _header.SortChip.Text = _sort.ToString();
+        _header.LayoutChip();
+        _list.SetRows(rows);
+    }
+
+    void ShowSortMenu()
+    {
+        var menu = NewMenu();
+        foreach (var sort in Enum.GetValues<Sort>())
+            menu.Items.Add(new ToolStripMenuItem(sort.ToString(), null, (_, _) => { _sort = sort; FillList(); }) { Checked = sort == _sort });
+        menu.Show(_header.SortChip, new Point(0, _header.SortChip.Height + S(4)));
     }
 
     void NewFolder()
     {
         var name = BookmarkStore.AddFolder("New folder");
-        FillFolders(name);
-        _folders.SelectedNode?.BeginEdit();
+        Refill(FolderPrefix + name);
+        _nav.BeginRename(FolderPrefix + name);
     }
 
-    void RenameFolder(object? sender, NodeLabelEditEventArgs e)
+    void RenameFolder(string key, string name)
     {
-        e.CancelEdit = true; // The list is rebuilt from the store either way.
-        if (e.Label == null || e.Node?.Tag is not string from) return;
-        if (!BookmarkStore.RenameFolder(from, e.Label)) _status.Text = $"There is already a folder called \"{e.Label.Trim()}\"";
-        else FillFolders(e.Label.Trim());
+        if (!key.StartsWith(FolderPrefix)) return;
+        if (BookmarkStore.RenameFolder(FolderOf(key), name)) Refill(FolderPrefix + name);
+        else _header.Note($"There is already a folder called \"{name}\"");
     }
 
-    void FolderDragOver(object? sender, DragEventArgs e)
+    void ShowFolderMenu(string key, Point at)
     {
-        var node = _folders.GetNodeAt(_folders.PointToClient(new Point(e.X, e.Y)));
-        bool canDrop = e.Data?.GetDataPresent(typeof(string[])) == true && node?.Tag is string tag && tag != AllNode;
-        e.Effect = canDrop ? DragDropEffects.Move : DragDropEffects.None;
-        if (canDrop) _folders.SelectedNode = node;
+        if (!key.StartsWith(FolderPrefix)) return;
+        var menu = NewMenu();
+        menu.Items.Add("Rename", null, (_, _) => _nav.BeginRename(key));
+        menu.Items.Add("Delete folder", null, (_, _) => BookmarkStore.DeleteFolder(FolderOf(key)));
+        menu.Items.Add(new ToolStripMenuItem("Its bookmarks move to Unsorted") { Enabled = false });
+        menu.Show(at);
     }
 
-    void FolderDragDrop(object? sender, DragEventArgs e)
+    void ShowBookmarkMenu(Point at)
     {
-        var node = _folders.GetNodeAt(_folders.PointToClient(new Point(e.X, e.Y)));
-        if (e.Data?.GetData(typeof(string[])) is string[] ids && node?.Tag is string folder && folder != AllNode)
-            BookmarkStore.Move(ids, folder);
-    }
-
-    // ---- bookmarks ----
-
-    void Fill()
-    {
-        var query = _search.Text.Trim();
-        var folder = SelectedFolder();
-        var all = BookmarkStore.Load();
-        // Searching looks through every folder, as in a browser.
-        var shown = query != ""
-            ? all.Where(b => new[] { b.Name, b.Text, b.SessionTitle, b.Folder }.Any(s => s.Contains(query, StringComparison.OrdinalIgnoreCase)))
-            : folder == AllNode ? all : all.Where(b => b.Folder == folder);
-
-        Func<Bookmark, IComparable> key = _sortColumn switch
+        var selected = _list.SelectedBookmarks;
+        if (selected.Count == 0) return;
+        var ids = selected.Select(b => b.Id).ToList();
+        var menu = NewMenu();
+        if (selected.Count == 1)
         {
-            0 => b => b.Name,
-            1 => b => b.SessionTitle,
-            2 => b => b.FromUser ? "You" : "Claude",
-            _ => b => b.AddedAt,
-        };
-        var sorted = (_sortAscending ? shown.OrderBy(key) : shown.OrderByDescending(key)).ToList();
-
-        _list.BeginUpdate();
-        _list.Items.Clear();
-        foreach (var b in sorted)
-        {
-            var added = DateTimeOffset.FromUnixTimeMilliseconds(b.AddedAt).LocalDateTime.ToString("MMM d, HH:mm");
-            _list.Items.Add(new ListViewItem([b.Name, b.SessionTitle, b.FromUser ? "You" : "Claude", added]) { Tag = b, ToolTipText = b.Text });
+            menu.Items.Add("Open", null, (_, _) => BookmarkMenu.Open(selected[0]));
+            menu.Items.Add("Rename", null, (_, _) => _list.BeginRename());
         }
-        _list.ShowItemToolTips = true;
-        _list.EndUpdate();
-        _status.Text = query != "" ? $"{sorted.Count} found in all folders" : $"{sorted.Count} bookmark{(sorted.Count == 1 ? "" : "s")}";
-    }
-
-    IEnumerable<string> SelectedIds() => _list.SelectedItems.Cast<ListViewItem>().Select(i => ((Bookmark)i.Tag!).Id);
-
-    void OpenSelected()
-    {
-        if (_list.SelectedItems.Count == 0) return;
-        BookmarkMenu.Open((Bookmark)_list.SelectedItems[0].Tag!);
-    }
-
-    void DeleteSelected()
-    {
-        var ids = SelectedIds().ToList();
-        if (ids.Count > 0) BookmarkStore.Remove(ids);
-    }
-
-    void RenameBookmark(object? sender, LabelEditEventArgs e)
-    {
-        e.CancelEdit = true; // The list is rebuilt from the store either way.
-        if (e.Label != null) BookmarkStore.Rename(((Bookmark)_list.Items[e.Item].Tag!).Id, e.Label);
-    }
-
-    ContextMenuStrip BookmarkMenuStrip()
-    {
-        var menu = new ContextMenuStrip { Renderer = DarkMenu.Renderer, ShowImageMargin = false };
-        var open = new ToolStripMenuItem("Open\tEnter", null, (_, _) => OpenSelected());
-        var rename = new ToolStripMenuItem("Rename\tF2", null, (_, _) => { if (_list.SelectedItems.Count == 1) _list.SelectedItems[0].BeginEdit(); });
         var move = new ToolStripMenuItem("Move to");
-        var copy = new ToolStripMenuItem("Copy message text", null, (_, _) =>
-            Clipboard.SetText(string.Join("\n\n", _list.SelectedItems.Cast<ListViewItem>().Select(i => ((Bookmark)i.Tag!).Text))));
-        var delete = new ToolStripMenuItem("Delete\tDel", null, (_, _) => DeleteSelected());
-        menu.Items.AddRange([open, rename, move, copy, new ToolStripSeparator(), delete]);
-        menu.Opening += (_, e) =>
+        move.DropDown.BackColor = Theme.Card;
+        move.DropDownItems.Add("Unsorted", null, (_, _) => BookmarkStore.Move(ids, ""));
+        foreach (var f in BookmarkStore.Folders())
+            move.DropDownItems.Add(f.Replace("&", "&&"), null, (_, _) => BookmarkStore.Move(ids, f));
+        move.DropDownItems.Add(new ToolStripSeparator());
+        move.DropDownItems.Add("New folder…", null, (_, _) =>
         {
-            int n = _list.SelectedItems.Count;
-            if (n == 0) { e.Cancel = true; return; }
-            open.Enabled = rename.Enabled = n == 1;
-            move.DropDownItems.Clear();
-            move.DropDownItems.Add("Unsorted", null, (_, _) => BookmarkStore.Move(SelectedIds().ToList(), ""));
-            foreach (var f in BookmarkStore.Folders())
-                move.DropDownItems.Add(f.Replace("&", "&&"), null, (_, _) => BookmarkStore.Move(SelectedIds().ToList(), f));
-            move.DropDownItems.Add(new ToolStripSeparator());
-            move.DropDownItems.Add("New folder…", null, (_, _) =>
-            {
-                var ids = SelectedIds().ToList();
-                var name = BookmarkStore.AddFolder("New folder");
-                BookmarkStore.Move(ids, name);
-                FillFolders(name);
-                _folders.SelectedNode?.BeginEdit();
-            });
-        };
+            var name = BookmarkStore.AddFolder("New folder");
+            BookmarkStore.Move(ids, name);
+            Refill(FolderPrefix + name);
+            _nav.BeginRename(FolderPrefix + name);
+        });
+        menu.Items.Add(move);
+        menu.Items.Add("Copy message text", null, (_, _) => Clipboard.SetText(string.Join("\n\n", selected.Select(b => b.Text))));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(selected.Count == 1 ? "Delete" : $"Delete {selected.Count} bookmarks", null, (_, _) => BookmarkStore.Remove(ids));
+        menu.Show(at);
+    }
+
+    ContextMenuStrip NewMenu()
+    {
+        var menu = new ContextMenuStrip { Renderer = DarkMenu.Renderer, ShowImageMargin = false, Font = Theme.Ui(S(14)) };
+        menu.Closed += (_, _) => menu.BeginInvoke(menu.Dispose);
         return menu;
     }
 
-    void DrawHeader(object? sender, DrawListViewColumnHeaderEventArgs e)
+    /// <summary>The list's header: the folder's name, a count, a passing note, and the sort chip.</summary>
+    sealed class Header : ThemedControl
     {
-        using (var back = new SolidBrush(Panel)) e.Graphics.FillRectangle(back, e.Bounds);
-        using (var line = new Pen(Line)) e.Graphics.DrawLine(line, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
-        var arrow = e.ColumnIndex == _sortColumn ? (_sortAscending ? "  ▲" : "  ▼") : "";
-        TextRenderer.DrawText(e.Graphics, e.Header!.Text + arrow, Font, Rectangle.Inflate(e.Bounds, -6, 0), DimText,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        public readonly Chip SortChip = new();
+        string _title = "", _subtitle = "", _note = "";
+        readonly System.Windows.Forms.Timer _noteTimer = new() { Interval = 3500 };
+
+        public Header()
+        {
+            BackColor = Theme.Main;
+            Controls.Add(SortChip);
+            _noteTimer.Tick += (_, _) => { _noteTimer.Stop(); _note = ""; Invalidate(); };
+        }
+
+        public void SetTitle(string value) { _title = value; Invalidate(); }
+        public void SetSubtitle(string value) { _subtitle = value; Invalidate(); }
+
+        public void Note(string text)
+        {
+            _note = text;
+            _noteTimer.Stop();
+            _noteTimer.Start();
+            Invalidate();
+        }
+
+        public void LayoutChip()
+        {
+            int w = SortChip.PreferredWidth(), h = S(30);
+            SortChip.SetBounds(Width - w - S(24), S(26), w, h);
+        }
+
+        protected override void OnResize(EventArgs e) { base.OnResize(e); LayoutChip(); }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            Prepare(g);
+            g.Clear(Theme.Main);
+            using var title = Theme.Ui(S(21), semibold: true);
+            using var small = Theme.Ui(S(13.5f));
+            int left = S(32), width = SortChip.Left - left - S(16);
+            Draw(g, _title, title, new Rectangle(left, S(14), width, S(34)), Theme.Text);
+            Draw(g, _note != "" ? _note : _subtitle, small, new Rectangle(left, S(46), width, S(22)), _note != "" ? Theme.Accent : Theme.Dim);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _noteTimer.Dispose();
+            base.Dispose(disposing);
+        }
     }
 }

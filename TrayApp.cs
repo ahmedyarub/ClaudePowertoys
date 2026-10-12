@@ -55,7 +55,7 @@ sealed class TrayApp : ApplicationContext
             catch (Exception ex) { Log.Write($"Search index: {ex.Message}"); }
         });
 
-        var menu = new ContextMenuStrip();
+        var menu = new ContextMenuStrip { Renderer = DarkMenu.Renderer, Font = Theme.Ui(14 * (_menuOwner.DeviceDpi / 96f)) };
         menu.Items.Add(Toggle("Auto-hide sidebar", _settings.AutoHideSidebar, on =>
         {
             _settings.AutoHideSidebar = on;
@@ -141,7 +141,7 @@ sealed class TrayApp : ApplicationContext
 
         _icon = new NotifyIcon
         {
-            Icon = DrawIcon(0),
+            Icon = AppIcon.Draw(AppIcon.TraySize),
             Text = "Claude Powertoys",
             ContextMenuStrip = menu,
             Visible = true,
@@ -237,8 +237,8 @@ sealed class TrayApp : ApplicationContext
         if (waiting.Count != _waiting.Count)
         {
             var old = _icon.Icon;
-            _icon.Icon = DrawIcon(waiting.Count);
-            if (old != null) DestroyIcon(old.Handle);
+            _icon.Icon = AppIcon.Draw(AppIcon.TraySize, waiting.Count);
+            old?.Dispose();
         }
         _waiting = waiting;
 
@@ -251,36 +251,4 @@ sealed class TrayApp : ApplicationContext
         if (_icon.Text != text) _icon.Text = text;
     }
 
-    [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr icon);
-
-    /// <param name="waiting">Drawn as a badge in the corner when above zero.</param>
-    static Icon DrawIcon(int waiting)
-    {
-        using var bmp = new Bitmap(32, 32);
-        using (var g = Graphics.FromImage(bmp))
-        {
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-            using var path = new GraphicsPath();
-            path.AddArc(0, 0, 12, 12, 180, 90);
-            path.AddArc(19, 0, 12, 12, 270, 90);
-            path.AddArc(19, 19, 12, 12, 0, 90);
-            path.AddArc(0, 19, 12, 12, 90, 90);
-            path.CloseFigure();
-            using var fill = new SolidBrush(Color.FromArgb(217, 119, 87));
-            g.FillPath(fill, path);
-            using var font = new Font("Segoe UI", 15, FontStyle.Bold, GraphicsUnit.Pixel);
-            using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            g.DrawString("PT", font, Brushes.White, new RectangleF(0, 1, 32, 32), format);
-            if (waiting > 0)
-            {
-                using var badge = new SolidBrush(Color.FromArgb(200, 40, 40));
-                g.FillEllipse(badge, 13, 13, 19, 19);
-                g.DrawEllipse(Pens.White, 13, 13, 18, 18);
-                using var small = new Font("Segoe UI", waiting > 9 ? 10 : 13, FontStyle.Bold, GraphicsUnit.Pixel);
-                g.DrawString(waiting > 9 ? "9+" : waiting.ToString(), small, Brushes.White, new RectangleF(13, 14, 19, 19), format);
-            }
-        }
-        return Icon.FromHandle(bmp.GetHicon());
-    }
 }

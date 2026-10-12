@@ -73,11 +73,15 @@ Right-click the **PT** icon in the notification area to use it.
   Bookmarks menu, also on the outline button's right-click menu, lists your folders and unsorted
   bookmarks; picking one opens the session and scrolls to the message. Stored in
   `%APPDATA%\ClaudePowertoys\bookmarks.json`. Left alone in other text fields (the terminal).
-- **Bookmark manager** (Bookmarks > Manage bookmarks…): like a browser's. Folders on the left (All
-  bookmarks, Unsorted, yours), bookmarks on the right with Name, Session, By and Added columns
-  (click a header to sort), and a search box across all folders. Double-click or Enter opens, F2
-  renames, Delete removes, drag onto a folder to move; right-click for Move to, Copy message text
-  and folder actions. Deleting a folder moves its bookmarks to Unsorted.
+- **Bookmark manager** (Bookmarks > Manage bookmarks…), in Claude Desktop's style: a sidebar with
+  a search field (across all folders), All bookmarks, Unsorted and your folders (+ adds one), and
+  the selected folder's bookmarks as two-line rows (name; who, session, when) with a sort chip.
+  Double-click or Enter opens, F2 renames, Delete removes, Ctrl / Shift select several, drag onto
+  a folder to move; right-click for Move to, Copy message text and folder actions. Deleting a
+  folder moves its bookmarks to Unsorted.
+
+The windows, menus and tray icon follow Claude Desktop's dark look (colours sampled from the app).
+Text uses [Inter](https://github.com/rsms/inter) when it is installed, else Segoe UI Variable.
 - **Alt+Up: earlier prompts** (on by default): in Claude's prompt box, hold Alt and press Up to
   list your earlier prompts (newest first, every Claude Code session of the last 30 days); Up /
   Down move while Alt is held, Esc cancels, and releasing Alt types the chosen one at the cursor.
