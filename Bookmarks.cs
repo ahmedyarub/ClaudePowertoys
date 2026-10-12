@@ -233,25 +233,96 @@ sealed class BookmarkShortcut : IDisposable
         var transcript = session == null ? null : ConversationPrompts.FindTranscript(session.Value.CliSessionId);
         if (transcript == null) return "No transcript for this session";
 
-        var candidates = ConversationExport.Parts(transcript)
-            .Where(p => p.FromUser == fromUser && ConversationView.Matches(ConversationView.Normalize(p.Text), start))
-            .ToList();
-        if (candidates.Count == 0)
+        var parts = ConversationExport.Parts(transcript);
+        var group = Resolve(headings, index, parts);
+        // One heading can stand for several of Claude's messages in a row; the paragraph under the
+        // pointer says which one. A paragraph that isn't in the transcript (the app's rewording of an
+        // in-progress message) is bookmarked as shown, under the prompt the heading belongs to.
+        var paragraph = ParagraphAt(AutomationElement.FromHandle(claude), at);
+        var part = paragraph == null ? group : PartHolding(paragraph, parts, group?.PromptIndex)
+            ?? (group is { } g && !fromUser ? (false, paragraph, g.PromptIndex) : group);
+        if (part != null) fromUser = part.Value.FromUser;
+        if (part == null)
         {
             Log.Write($"Bookmark: '{start}' not found in the transcript");
             return "Couldn't find that message";
         }
-        // Messages with the same opening: count back from the newest loaded one.
+
+        var text = part.Value.Text.Length <= KeptChars ? part.Value.Text : part.Value.Text[..KeptChars] + "…";
+        var s = session!.Value;
+        var bookmark = new Bookmark(s.SessionId, s.CliSessionId, s.Title, fromUser, text, part.Value.PromptIndex, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        bool added = BookmarkStore.Toggle(bookmark);
+        Log.Write($"Bookmark {(added ? "added" : "removed")}: '{s.Title}', {(fromUser ? "you" : "Claude")}, prompt {part.Value.PromptIndex + 1}");
+        return added ? "★ Bookmarked" : "Bookmark removed";
+    }
+
+    /// <summary>The paragraph under the pointer: the smallest text element of Claude's window there with real text.</summary>
+    public static string? ParagraphAt(AutomationElement window, Point at) =>
+        window.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Text))
+            .Cast<AutomationElement>()
+            .Select(e => (e, r: e.Current.BoundingRectangle))
+            // Short names (a button label, a word) say nothing about which message it is.
+            .Where(x => x.r.Contains(at.X, at.Y) && (x.e.Current.Name?.Length ?? 0) >= 15)
+            .OrderBy(x => x.r.Width * x.r.Height)
+            .Select(x => x.e.Current.Name)
+            .FirstOrDefault();
+
+    /// <summary>
+    /// The message that holds <paramref name="paragraph"/> word for word; one answering
+    /// <paramref name="promptIndex"/> wins when several do. Null when none does: the app shows some of
+    /// Claude's in-progress messages reworded, and those aren't in the transcript.
+    /// </summary>
+    public static (bool FromUser, string Text, int PromptIndex)? PartHolding(
+        string paragraph, List<(bool FromUser, string Text, int PromptIndex)> parts, int? promptIndex)
+    {
+        var text = ConversationView.Normalize(paragraph);
+        var exact = parts.Where(p => ConversationView.Normalize(p.Text).Contains(text, StringComparison.Ordinal)).ToList();
+        if (exact.Count == 0) return null;
+        return exact.Where(p => p.PromptIndex == promptIndex).Select(p => ((bool, string, int)?)p).LastOrDefault() ?? exact[^1];
+    }
+
+    /// <summary>The transcript part the message under heading <paramref name="index"/> is, or null.</summary>
+    public static (bool FromUser, string Text, int PromptIndex)? Resolve(
+        List<AutomationElement> headings, int index, List<(bool FromUser, string Text, int PromptIndex)> parts)
+    {
+        var part = ByOpening(headings, index, parts);
+        if (part != null || ConversationView.IsPrompt(headings[index])) return part;
+
+        // Claude's headings are sometimes a summary of the reply rather than its opening words. Prompt
+        // headings are always the prompt's own words: find the prompt above, then the reply to it that
+        // shares the most words with the heading.
+        var start = ConversationView.Normalize(ConversationView.MessageStart(headings[index]));
+        int prompt = -1;
+        for (int i = index - 1; i >= 0; i--)
+            if (ConversationView.IsPrompt(headings[i]) && ByOpening(headings, i, parts) is { } p) { prompt = p.PromptIndex; break; }
+        return parts.Where(p => !p.FromUser && (prompt < 0 || p.PromptIndex == prompt))
+            .Select(p => ((bool FromUser, string Text, int PromptIndex)?)p)
+            .MaxBy(p => Overlap(p!.Value.Text, start));
+    }
+
+    /// <summary>
+    /// The transcript part whose opening is what heading <paramref name="index"/> shows; messages with
+    /// the same opening are told apart by counting back from the newest loaded one.
+    /// </summary>
+    static (bool FromUser, string Text, int PromptIndex)? ByOpening(
+        List<AutomationElement> headings, int index, List<(bool FromUser, string Text, int PromptIndex)> parts)
+    {
+        bool fromUser = ConversationView.IsPrompt(headings[index]);
+        var start = ConversationView.Normalize(ConversationView.MessageStart(headings[index]));
+        var candidates = parts.Where(p => p.FromUser == fromUser && ConversationView.Matches(ConversationView.Normalize(p.Text), start)).ToList();
+        if (candidates.Count == 0) return null;
         int laterSame = headings.Skip(index + 1)
             .Count(h => ConversationView.IsPrompt(h) == fromUser && ConversationView.Normalize(ConversationView.MessageStart(h)) == start);
-        var part = candidates[Math.Max(0, candidates.Count - 1 - laterSame)];
+        return candidates[Math.Max(0, candidates.Count - 1 - laterSame)];
+    }
 
-        var text = part.Text.Length <= KeptChars ? part.Text : part.Text[..KeptChars] + "…";
-        var s = session!.Value;
-        var bookmark = new Bookmark(s.SessionId, s.CliSessionId, s.Title, fromUser, text, part.PromptIndex, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-        bool added = BookmarkStore.Toggle(bookmark);
-        Log.Write($"Bookmark {(added ? "added" : "removed")}: '{s.Title}', {(fromUser ? "you" : "Claude")}, prompt {part.PromptIndex + 1}");
-        return added ? "★ Bookmarked" : "Bookmark removed";
+    /// <summary>How many of the heading's words (3+ letters, any case) the text has.</summary>
+    public static int Overlap(string text, string heading)
+    {
+        static HashSet<string> Words(string s) => System.Text.RegularExpressions.Regex.Matches(s.ToLowerInvariant(), @"[\p{L}\p{N}]{3,}")
+            .Select(m => m.Value).ToHashSet();
+        var have = Words(text);
+        return Words(heading).Count(have.Contains);
     }
 }
 
@@ -302,14 +373,30 @@ static class BookmarkMenu
                 OutlineButton.JumpToPrompt(claude, ConversationPrompts.Read(transcript), b.PromptIndex);
                 if (b.FromUser) return;
 
-                // Claude's reply: from its prompt, on to the reply's own heading.
+                // Claude's reply: from its prompt (now at the top of the view), on to the paragraph the
+                // bookmark holds (the whole reply, or the line as the app showed it), else to the reply
+                // heading under the prompt that best matches.
                 Thread.Sleep(400);
-                var start = ConversationView.Normalize(b.Text);
-                var area = ConversationView.ScrollArea(AutomationElement.FromHandle(claude));
-                var reply = ConversationView.MessageHeadings(AutomationElement.FromHandle(claude))
-                    .Where(h => !ConversationView.IsPrompt(h) && ConversationView.Matches(start, ConversationView.Normalize(ConversationView.MessageStart(h))))
-                    .FirstOrDefault(h => area == null || h.Current.BoundingRectangle.Top >= area.Value.Top - 2);
-                if (reply != null) ConversationView.ScrollTo(reply);
+                var window = AutomationElement.FromHandle(claude);
+                var area = ConversationView.ScrollArea(window);
+                var headings = ConversationView.MessageHeadings(window);
+                int prompt = headings.FindIndex(h => ConversationView.IsPrompt(h) && (area == null || h.Current.BoundingRectangle.Top >= area.Value.Top - 2));
+                if (prompt < 0) return;
+                var text = ConversationView.Normalize(b.Text);
+                double promptTop = headings[prompt].Current.BoundingRectangle.Top;
+                var paragraph = window.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Text))
+                    .Cast<AutomationElement>()
+                    .Where(e => e.Current.BoundingRectangle.Top >= promptTop && (e.Current.Name?.Length ?? 0) >= 15)
+                    .FirstOrDefault(e => text.Contains(ConversationView.Normalize(e.Current.Name), StringComparison.Ordinal));
+                if (paragraph != null && paragraph.TryGetCurrentPattern(ScrollItemPattern.Pattern, out var scroll))
+                {
+                    ((ScrollItemPattern)scroll).ScrollIntoView();
+                    return;
+                }
+                var reply = headings.Skip(prompt + 1).TakeWhile(h => !ConversationView.IsPrompt(h))
+                    .Select(h => (h, start: ConversationView.Normalize(ConversationView.MessageStart(h))))
+                    .MaxBy(x => ConversationView.Matches(text, x.start) ? int.MaxValue : BookmarkShortcut.Overlap(text, x.start));
+                if (reply.h != null) ConversationView.ScrollTo(reply.h);
             }
             catch (Exception ex) { Log.Write($"Bookmark jump failed: {ex.GetType().Name}: {ex.Message}"); }
         });
