@@ -96,7 +96,9 @@ sealed class BookmarkManager : Form
         _list.ContextMenuStrip = BookmarkMenuStrip();
 
         // A wide splitter to grab, drawn as a thin line in its middle.
-        var split = new SplitContainer { Dock = DockStyle.Fill, BackColor = Background, SplitterWidth = S(7), Panel1MinSize = S(160), Panel2MinSize = S(300) };
+        // Minimum pane sizes are set once the window has its size (Load): set now, against the
+        // container's default width, WinForms rejects them.
+        var split = new SplitContainer { Dock = DockStyle.Fill, BackColor = Background, SplitterWidth = S(7) };
         split.Paint += (_, e) =>
         {
             var r = split.SplitterRectangle;
@@ -121,6 +123,8 @@ sealed class BookmarkManager : Form
         Load += (_, _) =>
         {
             split.SplitterDistance = S(270);
+            split.Panel1MinSize = S(160);
+            split.Panel2MinSize = S(300);
             FillFolders(AllNode);
             _search.Focus();
         };
