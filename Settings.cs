@@ -11,6 +11,7 @@ sealed class Settings
     public bool CtrlEnterSendsNow { get; set; } = true;
     public bool OutlineButton { get; set; } = true;
     public bool PromptJump { get; set; } = true;
+    public bool ConversationEnds { get; set; } = true;
     public bool Snippets { get; set; } = true;
     public bool PromptHistory { get; set; } = true;
     public bool Search { get; set; } = true;

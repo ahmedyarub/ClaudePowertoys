@@ -13,6 +13,7 @@ sealed class TrayApp : ApplicationContext
     readonly SendNowShortcut _sendNow = new();
     readonly OutlineButton _outline = new();
     readonly PromptJumpShortcut _promptJump = new();
+    readonly ConversationEndsShortcut _conversationEnds = new();
     readonly SnippetInserter _snippets = new();
     readonly PromptHistoryRecall _history = new();
     readonly BookmarkShortcut _bookmarks = new();
@@ -85,6 +86,11 @@ sealed class TrayApp : ApplicationContext
         {
             _settings.PromptJump = on;
             _promptJump.Enabled = on;
+        }));
+        menu.Items.Add(Toggle("Ctrl+Home/End: start or end of the conversation", _settings.ConversationEnds, on =>
+        {
+            _settings.ConversationEnds = on;
+            _conversationEnds.Enabled = on;
         }));
         menu.Items.Add(Toggle("Ctrl+Shift+Space: insert a snippet", _settings.Snippets, on =>
         {
@@ -164,6 +170,7 @@ sealed class TrayApp : ApplicationContext
         _outline.Enabled = _settings.OutlineButton;
         _outline.Start();
         _promptJump.Enabled = _settings.PromptJump;
+        _conversationEnds.Enabled = _settings.ConversationEnds;
         _snippets.Enabled = _settings.Snippets;
         _history.Enabled = _settings.PromptHistory;
         _bookmarks.Enabled = _settings.Bookmarks;
@@ -214,6 +221,7 @@ sealed class TrayApp : ApplicationContext
         _sendNow.Dispose();
         _outline.Dispose();
         _promptJump.Dispose();
+        _conversationEnds.Dispose();
         _snippets.Dispose();
         _history.Dispose();
         _bookmarks.Dispose();

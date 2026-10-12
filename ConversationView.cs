@@ -74,13 +74,20 @@ static class ConversationView
     }
 
     /// <summary>The area the conversation scrolls in: the largest vertically scrollable element.</summary>
-    public static System.Windows.Rect? ScrollArea(AutomationElement window) =>
+    public static System.Windows.Rect? ScrollArea(AutomationElement window) => Scroller(window)?.Current.BoundingRectangle;
+
+    /// <summary>The element the conversation scrolls in (the largest vertically scrollable one).</summary>
+    public static AutomationElement? Scroller(AutomationElement window) =>
         window.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.IsScrollPatternAvailableProperty, true))
             .Cast<AutomationElement>()
             .Where(e => ((ScrollPattern)e.GetCurrentPattern(ScrollPattern.Pattern)).Current.VerticallyScrollable)
-            .Select(e => e.Current.BoundingRectangle)
-            .Where(r => !r.IsEmpty)
-            .OrderByDescending(r => r.Width * r.Height)
-            .Cast<System.Windows.Rect?>()
-            .FirstOrDefault();
+            .Where(e => !e.Current.BoundingRectangle.IsEmpty)
+            .MaxBy(e => e.Current.BoundingRectangle.Width * e.Current.BoundingRectangle.Height);
+
+    /// <summary>Scrolls the conversation all the way up (0) or down (100).</summary>
+    public static void ScrollToPercent(AutomationElement window, double percent)
+    {
+        if (Scroller(window) is { } scroller)
+            ((ScrollPattern)scroller.GetCurrentPattern(ScrollPattern.Pattern)).SetScrollPercent(ScrollPattern.NoScroll, percent);
+    }
 }

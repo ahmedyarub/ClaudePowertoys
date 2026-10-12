@@ -86,6 +86,9 @@ Text uses [Inter](https://github.com/rsms/inter) when it is installed, else Sego
   list your earlier prompts (newest first, every Claude Code session of the last 30 days); Up /
   Down move while Alt is held, Esc cancels, and releasing Alt types the chosen one at the cursor.
   A draft in the box is never replaced.
+- **Ctrl+Home / Ctrl+End** (on by default): in Claude, scroll to the beginning / end of the
+  conversation, pressing the app's Load earlier / later messages until there is nothing more that
+  way. Left alone in other text fields; in the prompt box they scroll instead of moving the cursor.
 - **Win+Alt+C: sessions waiting for you** (on by default): from any app, opens Claude Desktop's
   own "Sessions Waiting for You" (`claude://code/needs-input`). Change the combination with
   `NeedsInputHotkeyKeys` in `settings.json` (Win+Shift+C is taken on this machine); the tray menu
