@@ -96,7 +96,7 @@ sealed class SessionSwitcher : IDisposable
         var shown = _shown;
         int selected = _selected;
         var claude = ClaudeWindow.Find();
-        _form.BeginInvoke(() => _form.ShowList(claude, shown, selected));
+        Ui.Post(_form, () => _form.ShowList(claude, shown, selected));
     }
 
     void Move(int step)
@@ -104,14 +104,14 @@ sealed class SessionSwitcher : IDisposable
         if (_shown == null || _shown.Count == 0) return;
         _selected = (_selected + step + _shown.Count) % _shown.Count;
         int selected = _selected;
-        _form.BeginInvoke(() => _form.Select(selected));
+        Ui.Post(_form, () => _form.Select(selected));
     }
 
     void Close(SessionInfo? switchTo)
     {
         bool isCurrent = _shown != null && _shown.Count > 0 && switchTo == _shown[0];
         _shown = null;
-        _form.BeginInvoke(() => _form.Conceal());
+        Ui.Post(_form, _form.Conceal);
         if (switchTo == null || isCurrent) return;
 
         Log.Write($"Switch to session '{switchTo.Title}' ({switchTo.SessionId})");
@@ -137,7 +137,7 @@ sealed class SessionSwitcher : IDisposable
                 _scanning = false;
             }
             // A switcher opened before the first scan finished gets the list now.
-            if (found != null) _form.BeginInvoke(() => Refill(found));
+            if (found != null) Ui.Post(_form, () => Refill(found));
         });
     }
 
@@ -185,6 +185,7 @@ sealed class SwitcherForm : Form
 
     public SwitcherForm()
     {
+        Lifeline.Guard(this);
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;

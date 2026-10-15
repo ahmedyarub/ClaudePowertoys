@@ -19,6 +19,7 @@ class OwnedToolWindow : Form
 
     public OwnedToolWindow()
     {
+        Lifeline.Guard(this);
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;

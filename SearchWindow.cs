@@ -27,6 +27,7 @@ sealed class SearchWindow : Form
 
     public SearchWindow()
     {
+        Lifeline.Guard(this);
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
@@ -121,7 +122,7 @@ sealed class SearchWindow : Form
             List<SearchHit> hits;
             try { hits = SearchIndex.Search(query); }
             catch (Exception ex) { Log.Write($"Search failed: {ex.Message}"); hits = []; }
-            BeginInvoke(() => { if (id == _searchId) Show(hits, query); });
+            Ui.Post(this, () => { if (id == _searchId) Show(hits, query); });
         });
     }
 

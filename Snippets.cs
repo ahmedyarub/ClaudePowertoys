@@ -71,7 +71,7 @@ sealed class SnippetInserter : IDisposable
     {
         if (vk != VK_SPACE || !KeyHeld(VK_CONTROL) || !KeyHeld(VK_SHIFT) || KeyHeld(VK_MENU)) return false;
         if (!ClaudeWindow.IsInFront() || FocusTracker.InOtherTextField) return false;
-        if (IsDown(message)) _ui.BeginInvoke(ShowPicker);
+        if (IsDown(message)) Ui.Post(_ui, ShowPicker);
         return true;
     }
 

@@ -109,7 +109,7 @@ sealed class PromptHistoryRecall : IDisposable
         TextTyper.MaskAltRelease();
         _entries = [];
         _selected = 0;
-        _popup.BeginInvoke(Open);
+        Ui.Post(_popup, Open);
         return true;
     }
 
@@ -128,7 +128,7 @@ sealed class PromptHistoryRecall : IDisposable
         if (_entries == null || _entries.Count == 0) return;
         _selected = Math.Clamp(_selected + step, 0, _entries.Count - 1);
         int row = Row(_selected);
-        _popup.BeginInvoke(() => _popup.Select(row));
+        Ui.Post(_popup, () => _popup.Select(row));
     }
 
     /// <summary>Where entry <paramref name="index"/> (0 = newest) is drawn in the reversed list.</summary>
@@ -138,7 +138,7 @@ sealed class PromptHistoryRecall : IDisposable
     {
         var chosen = insert && _entries is { Count: > 0 } ? _entries[_selected] : null;
         _entries = null;
-        _popup.BeginInvoke(() => _popup.Conceal());
+        Ui.Post(_popup, _popup.Conceal);
         if (chosen == null) return;
         // Typed once Alt is up: injected keys with Alt down would become Alt shortcuts.
         ThreadPool.QueueUserWorkItem(_ =>

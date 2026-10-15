@@ -33,6 +33,7 @@ sealed class TrayApp : ApplicationContext
     {
         // The forms created above installed WinForms' synchronization context on this thread.
         _ui = SynchronizationContext.Current!;
+        Lifeline.ExitApp = ExitThread;
         _status = new StatusMonitor(snapshot => _ui.Post(_ => ShowStatus(snapshot), null));
         _switcher.StatusOf = _status.Get;
         _autoHide = new SidebarAutoHide(_handleBlocker.OverlayHandle);
@@ -176,6 +177,7 @@ sealed class TrayApp : ApplicationContext
         _bookmarks.Enabled = _settings.Bookmarks;
         _status.RecentWindow = TimeSpan.FromHours(_settings.RecentSessionHours);
         _status.Start();
+        Lifeline.StartShielding();
         Log.Write("Started: " + string.Join(", ", menu.Items.OfType<ToolStripMenuItem>()
             .Where(i => i.CheckOnClick).Select(i => $"{i.Text} {OnOff(i.Checked)}")));
     }
@@ -215,6 +217,7 @@ sealed class TrayApp : ApplicationContext
 
     protected override void ExitThreadCore()
     {
+        Lifeline.Exiting = true;
         _autoHide.Dispose();
         _handleBlocker.Dispose();
         _switcher.Dispose();

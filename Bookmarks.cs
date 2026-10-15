@@ -213,7 +213,7 @@ sealed class BookmarkShortcut : IDisposable
                 try { note = BookmarkAt(at); }
                 catch (Exception ex) { note = "Couldn't bookmark"; Log.Write($"Bookmark failed: {ex.GetType().Name}: {ex.Message}"); }
                 finally { Interlocked.Exchange(ref _busy, 0); }
-                _flash.BeginInvoke(() => _flash.Show(note, at));
+                Ui.Post(_flash, () => _flash.Show(note, at));
             });
         }
         return true;
@@ -412,6 +412,7 @@ sealed class FlashTip : Form
 
     public FlashTip()
     {
+        Lifeline.Guard(this);
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;

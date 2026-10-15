@@ -28,6 +28,7 @@ sealed class ListPopup : Form
 
     public ListPopup(string title)
     {
+        Lifeline.Guard(this);
         _title = title;
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;

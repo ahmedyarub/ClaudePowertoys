@@ -26,6 +26,7 @@ sealed class BookmarkManager : Form
 
     public BookmarkManager()
     {
+        Lifeline.Guard(this);
         // Sizes are in logical pixels, scaled here: WinForms doesn't scale controls built in code.
         _scale = DeviceDpi / 96f;
         AutoScaleMode = AutoScaleMode.None;
@@ -90,10 +91,9 @@ sealed class BookmarkManager : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        // Kept for next time: closing only hides it.
-        if (e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); return; }
-        BookmarkStore.Changed -= OnStoreChanged;
+        // Kept for next time: Lifeline's guard turns closing into hiding, except when the app exits.
         base.OnFormClosing(e);
+        if (!e.Cancel) BookmarkStore.Changed -= OnStoreChanged;
     }
 
     public void ShowManager()
