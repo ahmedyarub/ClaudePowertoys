@@ -98,6 +98,20 @@ Text uses [Inter](https://github.com/rsms/inter) when it is installed, else Sego
   mouse of the folders your unarchived sessions worked in (most recent first, 1-9 pick, 0 for no
   folder) starts a new Code session there through `claude://code/new?folder=`, the same link the
   app's own jump list uses. `NewSessionHotkeyKeys` in `settings.json` changes the keys.
+- **New Venice session in** (tray menu): starts Claude Code in a Windows Terminal tab, in one of
+  your recent folders, with its model requests going to [Venice AI](https://venice.ai) instead of
+  your Anthropic subscription. Claude Desktop and a plain `claude` stay on the subscription, so
+  switching is just which one you start. Venice only speaks the OpenAI chat format, so Powertoys
+  runs a local [LiteLLM](https://github.com/BerriAI/litellm) proxy on `127.0.0.1:4100`
+  (`pip install "litellm[proxy]"`) that translates Claude Code's requests. Set your key once as a
+  user environment variable, `setx VENICE_API_KEY <key>`; only the proxy sees it. `/model` lists
+  Venice's models that take tools (the Claude models keep their usual ids, such as
+  `claude-opus-5-5`), and `VeniceModel` in `settings.json` picks the one sessions start on. The
+  proxy starts with the first session and stops when Powertoys exits, or with **Stop Venice proxy**
+  (for example after changing the key). Its config, Claude Code's settings file and its log are in
+  `%APPDATA%\ClaudePowertoys\venice\`. Venice bills these sessions per token, separately from
+  your subscription.
+
 - **Start with Windows** (off by default): adds Powertoys to your user's startup programs
   (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`), pointing at the running exe.
 

@@ -23,6 +23,13 @@ sealed class Settings
     public string NeedsInputHotkeyKeys { get; set; } = "Win+Alt+C";
     public bool NewSessionHotkey { get; set; } = true;
     public string NewSessionHotkeyKeys { get; set; } = "Win+Alt+N";
+    /// <summary>The local LiteLLM proxy that translates Claude Code's requests for Venice AI.</summary>
+    public int VeniceProxyPort { get; set; } = 4100;
+    public string LiteLlmPath { get; set; } = "litellm";
+    /// <summary>The model Venice sessions start on (a Venice model id); empty leaves Claude Code's default.</summary>
+    public string VeniceModel { get; set; } = "";
+    /// <summary>Generated: the key Claude Code presents to the local proxy. Not the Venice key.</summary>
+    public string VeniceProxyKey { get; set; } = "";
     /// <summary>How far back a session's last activity may be for the Ctrl+Tab list.</summary>
     public double RecentSessionHours { get; set; } = 8;
 

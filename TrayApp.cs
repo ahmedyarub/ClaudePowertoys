@@ -23,6 +23,7 @@ sealed class TrayApp : ApplicationContext
     readonly GlobalHotkey _newSessionHotkey;
     readonly GlobalHotkey _searchHotkey;
     readonly SearchWindow _search = new();
+    readonly VeniceSessions _venice;
     readonly ForegroundWatcher _foreground;
     readonly Control _menuOwner = new();
     readonly StatusMonitor _status;
@@ -37,6 +38,7 @@ sealed class TrayApp : ApplicationContext
         _status = new StatusMonitor(snapshot => _ui.Post(_ => ShowStatus(snapshot), null));
         _switcher.StatusOf = _status.Get;
         _autoHide = new SidebarAutoHide(_handleBlocker.OverlayHandle);
+        _venice = new VeniceSessions(_settings);
         _needsInputHotkey = new GlobalHotkey(_settings.NeedsInputHotkeyKeys, () =>
         {
             Log.Write($"{_settings.NeedsInputHotkeyKeys}: opening sessions waiting for you");
@@ -134,6 +136,7 @@ sealed class TrayApp : ApplicationContext
         };
         snippetsMenu.DropDownItems.Add("(loading)");
         menu.Items.Add(snippetsMenu);
+        menu.Items.Add(VeniceMenu());
         menu.Items.Add(HotkeyToggle("sessions waiting for you", _needsInputHotkey, _settings.NeedsInputHotkey, on => _settings.NeedsInputHotkey = on));
         menu.Items.Add(HotkeyToggle("new session in a recent folder", _newSessionHotkey, _settings.NewSessionHotkey, on => _settings.NewSessionHotkey = on));
         menu.Items.Add(new ToolStripSeparator());
@@ -213,6 +216,23 @@ sealed class TrayApp : ApplicationContext
         return item;
     }
 
+    /// <summary>Recent folders to start a Claude Code terminal session on Venice AI in, and the proxy's stop switch.</summary>
+    ToolStripMenuItem VeniceMenu()
+    {
+        var item = new ToolStripMenuItem("New Venice session in");
+        item.DropDownOpening += (_, _) =>
+        {
+            item.DropDownItems.Clear();
+            foreach (var folder in RecentSessions.RecentFolders(12))
+                item.DropDownItems.Add(new ToolStripMenuItem(System.IO.Path.GetFileName(folder), null, (_, _) => _venice.Start(folder)) { ToolTipText = folder });
+            item.DropDownItems.Add(new ToolStripMenuItem("Home folder", null, (_, _) => _venice.Start(null)));
+            item.DropDownItems.Add(new ToolStripSeparator());
+            item.DropDownItems.Add(new ToolStripMenuItem("Stop Venice proxy", null, (_, _) => _venice.StopProxy()) { Enabled = _venice.ProxyRunning });
+        };
+        item.DropDownItems.Add("(loading)");
+        return item;
+    }
+
     static string OnOff(bool on) => on ? "on" : "off";
 
     protected override void ExitThreadCore()
@@ -236,6 +256,7 @@ sealed class TrayApp : ApplicationContext
         _search.Dispose();
         _menuOwner.Dispose();
         _status.Dispose();
+        _venice.Dispose();
         _icon.Visible = false;
         _icon.Dispose();
         Log.Write("Exited");
