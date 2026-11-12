@@ -96,6 +96,15 @@ static class RecentSessions
         return m == null ? null : (m.CliSessionId, m.Title != "" ? m.Title : "Untitled session", m.SessionId);
     }
 
+    /// <summary>The folder the session on screen works in; null for a session without one.</summary>
+    public static string? OnScreenFolder()
+    {
+        var m = ReadSessionFiles().Where(m => !m.IsArchived && m.CliSessionId != "").MaxBy(m => m.LastFocusedAt);
+        if (m == null || m.Cwd == "" || m.Cwd.Contains(@"\Claude\scratch-workspaces\", StringComparison.OrdinalIgnoreCase)) return null;
+        var folder = m.Cwd.TrimEnd('\\', '/');
+        return Directory.Exists(folder) ? folder : null;
+    }
+
     static string FolderName(string cwd)
     {
         if (cwd == "") return "";

@@ -55,6 +55,25 @@ sealed class VeniceSessions : IDisposable
         OpenTerminal(folder);
     }
 
+    /// <summary>
+    /// The folders to start a Venice session in: the session on screen's folder first, then recent
+    /// folders and the home folder, then the proxy's stop switch.
+    /// </summary>
+    public void AddMenuItems(ToolStripItemCollection items)
+    {
+        var current = RecentSessions.OnScreenFolder();
+        if (current != null)
+        {
+            items.Add(new ToolStripMenuItem($"This session's folder ({Path.GetFileName(current)})", null, (_, _) => Start(current)) { ToolTipText = current });
+            items.Add(new ToolStripSeparator());
+        }
+        foreach (var folder in RecentSessions.RecentFolders(12).Where(f => !string.Equals(f, current, StringComparison.OrdinalIgnoreCase)))
+            items.Add(new ToolStripMenuItem(Path.GetFileName(folder), null, (_, _) => Start(folder)) { ToolTipText = folder });
+        items.Add(new ToolStripMenuItem("Home folder", null, (_, _) => Start(null)));
+        items.Add(new ToolStripSeparator());
+        items.Add(new ToolStripMenuItem("Stop Venice proxy", null, (_, _) => StopProxy()) { Enabled = ProxyRunning });
+    }
+
     /// <summary>Stops the proxy this app started; the next session starts a fresh one (for example after a new key).</summary>
     public void StopProxy()
     {

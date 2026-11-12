@@ -11,7 +11,7 @@ sealed class TrayApp : ApplicationContext
     readonly ResizeHandleBlocker _handleBlocker = new();
     readonly SessionSwitcher _switcher = new();
     readonly SendNowShortcut _sendNow = new();
-    readonly OutlineButton _outline = new();
+    readonly OutlineButton _outline;
     readonly PromptJumpShortcut _promptJump = new();
     readonly ConversationEndsShortcut _conversationEnds = new();
     readonly SnippetInserter _snippets = new();
@@ -39,6 +39,7 @@ sealed class TrayApp : ApplicationContext
         _switcher.StatusOf = _status.Get;
         _autoHide = new SidebarAutoHide(_handleBlocker.OverlayHandle);
         _venice = new VeniceSessions(_settings);
+        _outline = new OutlineButton(_venice.AddMenuItems);
         _needsInputHotkey = new GlobalHotkey(_settings.NeedsInputHotkeyKeys, () =>
         {
             Log.Write($"{_settings.NeedsInputHotkeyKeys}: opening sessions waiting for you");
@@ -85,6 +86,7 @@ sealed class TrayApp : ApplicationContext
             _settings.OutlineButton = on;
             _outline.Enabled = on;
         }));
+        menu.Items.Add(Toggle("Venice button in Claude", _settings.VeniceButton, on => _outline.VeniceEnabled = on));
         menu.Items.Add(Toggle("Ctrl+Up/Down jumps between prompts", _settings.PromptJump, on =>
         {
             _settings.PromptJump = on;
@@ -172,6 +174,7 @@ sealed class TrayApp : ApplicationContext
         _switcher.RecentWindow = TimeSpan.FromHours(_settings.RecentSessionHours);
         _sendNow.Enabled = _settings.CtrlEnterSendsNow;
         _outline.Enabled = _settings.OutlineButton;
+        _outline.VeniceEnabled = _settings.VeniceButton;
         _outline.Start();
         _promptJump.Enabled = _settings.PromptJump;
         _conversationEnds.Enabled = _settings.ConversationEnds;
@@ -223,11 +226,7 @@ sealed class TrayApp : ApplicationContext
         item.DropDownOpening += (_, _) =>
         {
             item.DropDownItems.Clear();
-            foreach (var folder in RecentSessions.RecentFolders(12))
-                item.DropDownItems.Add(new ToolStripMenuItem(System.IO.Path.GetFileName(folder), null, (_, _) => _venice.Start(folder)) { ToolTipText = folder });
-            item.DropDownItems.Add(new ToolStripMenuItem("Home folder", null, (_, _) => _venice.Start(null)));
-            item.DropDownItems.Add(new ToolStripSeparator());
-            item.DropDownItems.Add(new ToolStripMenuItem("Stop Venice proxy", null, (_, _) => _venice.StopProxy()) { Enabled = _venice.ProxyRunning });
+            _venice.AddMenuItems(item.DropDownItems);
         };
         item.DropDownItems.Add("(loading)");
         return item;

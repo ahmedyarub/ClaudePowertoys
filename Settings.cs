@@ -11,6 +11,8 @@ sealed class Settings
     public bool CtrlEnterSendsNow { get; set; } = true;
     public bool OutlineButton { get; set; } = true;
     public bool PromptJump { get; set; } = true;
+    /// <summary>A round "V" button under the outline button that starts a Claude Code session on Venice AI.</summary>
+    public bool VeniceButton { get; set; } = true;
     public bool ConversationEnds { get; set; } = true;
     public bool Snippets { get; set; } = true;
     public bool PromptHistory { get; set; } = true;

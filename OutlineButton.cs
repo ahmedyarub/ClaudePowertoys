@@ -11,7 +11,7 @@ namespace ClaudePowertoys;
 /// conversation column lists the prompts typed in the session (from its transcript file); picking
 /// one scrolls the conversation to it. The app only keeps part of a long conversation loaded, so
 /// when the prompt isn't loaded, its "Load earlier messages" / "Load later messages" buttons are
-/// pressed until it is.
+/// pressed until it is. A second button below it starts a Claude Code session on Venice AI.
 /// </summary>
 sealed class OutlineButton : IDisposable
 {
@@ -24,6 +24,8 @@ sealed class OutlineButton : IDisposable
         new PropertyCondition(AutomationElement.NameProperty, "Prompt"));
 
     readonly ButtonWindow _button;
+    readonly ButtonWindow _veniceButton;
+    readonly Action<ToolStripItemCollection> _addVeniceItems;
     readonly Thread _thread;
     volatile bool _stop;
     IntPtr _hwnd;
@@ -31,11 +33,18 @@ sealed class OutlineButton : IDisposable
     int _jumping;
 
     public volatile bool Enabled;
+    public volatile bool VeniceEnabled;
 
-    public OutlineButton()
+    /// <param name="addVeniceItems">Fills the Venice button's menu.</param>
+    public OutlineButton(Action<ToolStripItemCollection> addVeniceItems)
     {
-        _button = new ButtonWindow(ShowOutline, ShowExportMenu);
+        _addVeniceItems = addVeniceItems;
+        _button = new ButtonWindow(ShowOutline, ShowExportMenu, ButtonWindow.DrawList,
+            "Conversation outline", "Conversation outline (right-click to copy or export)");
+        _veniceButton = new ButtonWindow(ShowVeniceMenu, ShowVeniceMenu, ButtonWindow.DrawV,
+            "New Venice AI session", "New Claude Code session on Venice AI");
         _ = _button.Handle;
+        _ = _veniceButton.Handle;
         _thread = new Thread(Loop) { IsBackground = true, Name = "OutlineButton" };
     }
 
@@ -45,6 +54,7 @@ sealed class OutlineButton : IDisposable
     {
         _stop = true;
         _button.Dispose();
+        _veniceButton.Dispose();
     }
 
     void Loop()
@@ -54,7 +64,7 @@ sealed class OutlineButton : IDisposable
             Thread.Sleep(PollMs);
             try
             {
-                if (Enabled && Tick()) continue;
+                if ((Enabled || VeniceEnabled) && Tick()) continue;
             }
             catch (ElementNotAvailableException)
             {
@@ -66,11 +76,11 @@ sealed class OutlineButton : IDisposable
                 _promptBox = null;
                 Thread.Sleep(1000);
             }
-            Post(() => _button.Conceal());
+            Post(() => { _button.Conceal(); _veniceButton.Conceal(); });
         }
     }
 
-    /// <summary>Places the button beside the conversation column; false when there is no conversation on screen.</summary>
+    /// <summary>Places the buttons beside the conversation column; false when there is no conversation on screen.</summary>
     bool Tick()
     {
         if (_hwnd == IntPtr.Zero || !Native.IsWindow(_hwnd))
@@ -93,8 +103,15 @@ sealed class OutlineButton : IDisposable
         if (x + size > window.Right - gap) x = (int)box.Right - size;
         var bounds = new Rectangle(x, window.Top + (int)(TopLogical * scale), size, size);
 
+        // The Venice button sits below the outline button, or in its place when that one is off.
+        var veniceBounds = Enabled ? bounds with { Y = bounds.Bottom + gap / 2 } : bounds;
+        bool outline = Enabled, venice = VeniceEnabled;
         var owner = _hwnd;
-        Post(() => _button.Place(owner, bounds));
+        Post(() =>
+        {
+            if (outline) _button.Place(owner, bounds); else _button.Conceal();
+            if (venice) _veniceButton.Place(owner, veniceBounds); else _veniceButton.Conceal();
+        });
         return true;
     }
 
@@ -152,6 +169,16 @@ sealed class OutlineButton : IDisposable
         BookmarkMenu.AddItems(bookmarks.DropDownItems);
         menu.Items.Add(bookmarks);
         menu.Show(_button, new Point(_button.Width, _button.Height), ToolStripDropDownDirection.BelowLeft);
+    }
+
+    /// <summary>Folders to start a Venice session in, the session on screen's first. Runs on the UI thread.</summary>
+    void ShowVeniceMenu()
+    {
+        var menu = new ContextMenuStrip { ShowImageMargin = false, Renderer = DarkMenu.Renderer };
+        menu.Closed += (_, _) => menu.BeginInvoke(menu.Dispose);
+        menu.Items.Add(new ToolStripMenuItem("New Venice session in…") { Enabled = false });
+        _addVeniceItems(menu.Items);
+        menu.Show(_veniceButton, new Point(_veniceButton.Width, _veniceButton.Height), ToolStripDropDownDirection.BelowLeft);
     }
 
     static void Export(string transcript, string title)
@@ -225,7 +252,7 @@ sealed class OutlineButton : IDisposable
 
     [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr hwnd);
 
-    /// <summary>The round button: drawn by hand, never takes focus.</summary>
+    /// <summary>A round button: drawn by hand, never takes focus.</summary>
     sealed class ButtonWindow : OwnedToolWindow
     {
         static readonly Color Fill = Color.FromArgb(48, 48, 46);
@@ -235,17 +262,37 @@ sealed class OutlineButton : IDisposable
 
         readonly Action _onClick;
         readonly Action _onRightClick;
+        readonly Action<Graphics, Pen, int, int> _drawGlyph;
         readonly ToolTip _tip = new();
         bool _hover;
 
-        public ButtonWindow(Action onClick, Action onRightClick)
+        public ButtonWindow(Action onClick, Action onRightClick, Action<Graphics, Pen, int, int> drawGlyph, string name, string tip)
         {
             _onClick = onClick;
             _onRightClick = onRightClick;
+            _drawGlyph = drawGlyph;
             BackColor = Fill;
             DoubleBuffered = true;
             Cursor = Cursors.Hand;
-            _tip.SetToolTip(this, "Conversation outline (right-click to copy or export)");
+            // Names it for screen readers and UI Automation.
+            Text = name;
+            AccessibleName = name;
+            AccessibleRole = AccessibleRole.PushButton;
+            _tip.SetToolTip(this, tip);
+        }
+
+        /// <summary>Three lines: a list.</summary>
+        public static void DrawList(Graphics g, Pen pen, int width, int height)
+        {
+            float w = width * 0.42f, x = (width - w) / 2, gap = height * 0.15f, mid = height / 2f;
+            for (int i = -1; i <= 1; i++) g.DrawLine(pen, x, mid + i * gap, x + w, mid + i * gap);
+        }
+
+        /// <summary>A "V", for Venice.</summary>
+        public static void DrawV(Graphics g, Pen pen, int width, int height)
+        {
+            float w = width * 0.36f, x = (width - w) / 2, top = height * 0.32f, bottom = height * 0.68f;
+            g.DrawLines(pen, new[] { new PointF(x, top), new PointF(width / 2f, bottom), new PointF(x + w, top) });
         }
 
         protected override void OnResize(EventArgs e)
@@ -274,10 +321,8 @@ sealed class OutlineButton : IDisposable
             using (var fill = new SolidBrush(_hover ? FillHover : Fill)) g.FillEllipse(fill, 0, 0, Width - 1, Height - 1);
             using (var edge = new Pen(Edge, Math.Max(1, Width / 32f))) g.DrawEllipse(edge, 0.5f, 0.5f, Width - 2, Height - 2);
 
-            // Three lines: a list.
-            float w = Width * 0.42f, x = (Width - w) / 2, gap = Height * 0.15f, mid = Height / 2f;
-            using var pen = new Pen(Glyph, Math.Max(1.5f, Height / 16f)) { StartCap = LineCap.Round, EndCap = LineCap.Round };
-            for (int i = -1; i <= 1; i++) g.DrawLine(pen, x, mid + i * gap, x + w, mid + i * gap);
+            using var pen = new Pen(Glyph, Math.Max(1.5f, Height / 16f)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+            _drawGlyph(g, pen, Width, Height);
         }
 
         protected override void Dispose(bool disposing)

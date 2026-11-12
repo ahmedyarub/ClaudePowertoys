@@ -98,8 +98,10 @@ Text uses [Inter](https://github.com/rsms/inter) when it is installed, else Sego
   mouse of the folders your unarchived sessions worked in (most recent first, 1-9 pick, 0 for no
   folder) starts a new Code session there through `claude://code/new?folder=`, the same link the
   app's own jump list uses. `NewSessionHotkeyKeys` in `settings.json` changes the keys.
-- **New Venice session in** (tray menu): starts Claude Code in a Windows Terminal tab, in one of
-  your recent folders, with its model requests going to [Venice AI](https://venice.ai) instead of
+- **Venice AI sessions**: the round **V** button under the outline button in Claude (on by
+  default; "Venice button in Claude" in the tray menu), or **New Venice session in** in the tray
+  menu, lists the session on screen's folder first, then your recent folders. Picking one starts
+  Claude Code in a Windows Terminal tab there, with its model requests going to [Venice AI](https://venice.ai) instead of
   your Anthropic subscription. Claude Desktop and a plain `claude` stay on the subscription, so
   switching is just which one you start. Venice only speaks the OpenAI chat format, so Powertoys
   runs a local [LiteLLM](https://github.com/BerriAI/litellm) proxy on `127.0.0.1:4100`
