@@ -204,6 +204,9 @@ sealed class VeniceSessions : IDisposable
             }
             Write-Host ''
             if ($i -eq 90) { Write-Host "The proxy didn't start. Its log: {{ProxyLogPath}}" -ForegroundColor Red }
+            # When Powertoys was started from a Claude Code session, the tab inherits that session's
+            # variables (its own base URL, sign-in and child-session marker), which beat the settings file.
+            Get-ChildItem Env: | Where-Object Name -match '^(CLAUDE|ANTHROPIC)' | Remove-Item
             claude --settings '{{ClaudeSettingsPath}}' --model '{{_settings.VeniceModel}}'
             """;
         var psi = new ProcessStartInfo("wt.exe") { UseShellExecute = false };
