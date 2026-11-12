@@ -26,8 +26,8 @@ sealed class Settings
     /// <summary>The local LiteLLM proxy that translates Claude Code's requests for Venice AI.</summary>
     public int VeniceProxyPort { get; set; } = 4100;
     public string LiteLlmPath { get; set; } = "litellm";
-    /// <summary>The model Venice sessions start on (a Venice model id); empty leaves Claude Code's default.</summary>
-    public string VeniceModel { get; set; } = "";
+    /// <summary>The Venice model sessions run on, subagents and background work included; one of its uncensored models.</summary>
+    public string VeniceModel { get; set; } = "deepseek-v4-1-flash-1017-uncensored";
     /// <summary>Generated: the key Claude Code presents to the local proxy. Not the Venice key.</summary>
     public string VeniceProxyKey { get; set; } = "";
     /// <summary>How far back a session's last activity may be for the Ctrl+Tab list.</summary>

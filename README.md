@@ -104,13 +104,16 @@ Text uses [Inter](https://github.com/rsms/inter) when it is installed, else Sego
   switching is just which one you start. Venice only speaks the OpenAI chat format, so Powertoys
   runs a local [LiteLLM](https://github.com/BerriAI/litellm) proxy on `127.0.0.1:4100`
   (`pip install "litellm[proxy]"`) that translates Claude Code's requests. Set your key once as a
-  user environment variable, `setx VENICE_API_KEY <key>`; only the proxy sees it. `/model` lists
-  Venice's models that take tools (the Claude models keep their usual ids, such as
-  `claude-opus-5-5`), and `VeniceModel` in `settings.json` picks the one sessions start on. The
+  user environment variable, `setx VENICE_API_KEY <key>`; only the proxy sees it. Only Venice's
+  uncensored models that take tools are served (for example `venice-uncensored-1-2`,
+  `gemma-4-uncensored`), so a session can't reach Venice's Claude or other models; `/model` lists
+  them. `VeniceModel` in `settings.json` (default `deepseek-v4-1-flash-1017-uncensored`) is the one
+  sessions, subagents and background work run on. The
   proxy starts with the first session and stops when Powertoys exits, or with **Stop Venice proxy**
   (for example after changing the key). Its config, Claude Code's settings file and its log are in
-  `%APPDATA%\ClaudePowertoys\venice\`. Venice bills these sessions per token, separately from
-  your subscription.
+  `%APPDATA%\ClaudePowertoys\venice\`. Venice has no free API models: it bills these sessions
+  per token, from its daily DIEM / bundled credits or your USD balance, separately from your
+  subscription.
 
 - **Start with Windows** (off by default): adds Powertoys to your user's startup programs
   (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`), pointing at the running exe.

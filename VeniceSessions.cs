@@ -122,7 +122,10 @@ sealed class VeniceSessions : IDisposable
         catch { return false; }
     }
 
-    /// <summary>Venice's text models that take tools, which Claude Code needs; the list is public.</summary>
+    /// <summary>
+    /// Venice's uncensored text models that take tools, which Claude Code needs; the list is public.
+    /// Only these are served, so a session can't reach Venice's Claude or other models.
+    /// </summary>
     static List<string> VeniceModels()
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
@@ -133,7 +136,8 @@ sealed class VeniceSessions : IDisposable
             var tools = m.TryGetProperty("model_spec", out var spec)
                 && spec.TryGetProperty("capabilities", out var caps)
                 && caps.TryGetProperty("supportsFunctionCalling", out var f) && f.GetBoolean();
-            if (tools) models.Add(m.GetProperty("id").GetString()!);
+            var id = m.GetProperty("id").GetString()!;
+            if (tools && id.Contains("uncensored", StringComparison.OrdinalIgnoreCase)) models.Add(id);
         }
         return models;
     }
@@ -177,6 +181,11 @@ sealed class VeniceSessions : IDisposable
             ["ANTHROPIC_API_KEY"] = "",
             // Lists the proxy's Venice models in /model.
             ["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"] = "1",
+            // Subagents and background work (titles, summaries) ask for these tiers; without them they
+            // would ask for Claude models, which the proxy doesn't serve.
+            ["ANTHROPIC_DEFAULT_OPUS_MODEL"] = _settings.VeniceModel,
+            ["ANTHROPIC_DEFAULT_SONNET_MODEL"] = _settings.VeniceModel,
+            ["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = _settings.VeniceModel,
             // Pre-release request fields that the OpenAI translation can't carry.
             ["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] = "1",
         };
@@ -186,7 +195,6 @@ sealed class VeniceSessions : IDisposable
 
     void OpenTerminal(string folder)
     {
-        var model = string.IsNullOrWhiteSpace(_settings.VeniceModel) ? "" : $" --model '{_settings.VeniceModel}'";
         var script = $$"""
             $Host.UI.RawUI.WindowTitle = 'Claude Code (Venice)'
             Write-Host 'Waiting for the Venice proxy' -NoNewline
@@ -196,7 +204,7 @@ sealed class VeniceSessions : IDisposable
             }
             Write-Host ''
             if ($i -eq 90) { Write-Host "The proxy didn't start. Its log: {{ProxyLogPath}}" -ForegroundColor Red }
-            claude --settings '{{ClaudeSettingsPath}}'{{model}}
+            claude --settings '{{ClaudeSettingsPath}}' --model '{{_settings.VeniceModel}}'
             """;
         var psi = new ProcessStartInfo("wt.exe") { UseShellExecute = false };
         foreach (var arg in new[] { "-d", folder, "--title", "Claude Code (Venice)", "powershell.exe", "-NoLogo", "-NoExit", "-EncodedCommand",
